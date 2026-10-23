@@ -13,7 +13,7 @@ To play it on the web, turn on GitHub Pages for this repository (Settings → Pa
 ### Modes
 
 - **Story:** the flight, the crash and the chapters of the book: water and food, shelter, fire, the bow, the moose, the storm, swimming down into the sunken plane for the med kit, and the signal. The game saves at each chapter.
-- **Open world:** no chapters and no limits. Explore landmarks, hunt, chop down trees for wood, build a camp, ride out the weather and keep away from wolves and bears. Progress saves automatically, so you can continue later.
+- **Open world:** no chapters and no limits. Explore landmarks, hunt, chop down trees for wood, build a camp, ride out the weather and keep away from wolves and bears, and from the pike in the lake. Progress saves automatically, so you can continue later.
 
 ### Controls
 
