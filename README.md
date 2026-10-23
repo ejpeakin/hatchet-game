@@ -10,6 +10,8 @@ Open `index.html` in a recent desktop or mobile browser (Chrome, Edge, Firefox o
 
 To play it on the web, turn on GitHub Pages for this repository (Settings → Pages → deploy from the `main` branch, root folder). The game will be served from `index.html`.
 
+The game picks a graphics setting to suit your computer and adjusts it as you play: it lowers the setting if the game is slow, and tries one step up if it stays smooth. To choose a setting yourself, press G to switch between Auto, High, Medium and Low. F3 shows the frame rate.
+
 ### Modes
 
 - **Story:** the flight, the crash and the chapters of the book: water and food, shelter, fire, the bow, the moose, the storm, swimming down into the sunken plane for the med kit, and the signal. The game saves at each chapter.

@@ -5053,10 +5053,10 @@ function placeVegetation(){
 const VCH=80;
 function instanced(geo,mat,list,opts={}){
   // big scatters are split into 80 m cells so only the ones near the viewer are drawn (see lodUpdate)
-  const parts=new Map();if(list.length>600){for(const o of list){const k=Math.floor(o.x/VCH)+','+Math.floor(o.z/VCH);let a=parts.get(k);if(!a)parts.set(k,a=[]);a.push(o)}}else parts.set('all',list);
+  const parts=new Map();if(list.length>300){for(const o of list){const k=Math.floor(o.x/VCH)+','+Math.floor(o.z/VCH);let a=parts.get(k);if(!a)parts.set(k,a=[]);a.push(o)}}else parts.set('all',list);
   const m=new THREE.Matrix4(),c=new THREE.Color();let last=null;
   for(const [k,sub] of parts){
-    const im=new THREE.InstancedMesh(geo,mat,sub.length);im.frustumCulled=false;im.castShadow=!!opts.cast;im.receiveShadow=!!opts.cast;
+    const im=new THREE.InstancedMesh(geo,mat,sub.length);im.frustumCulled=false;im.castShadow=!!opts.cast;im.receiveShadow=!!opts.cast;im.userData.n=sub.length;if(opts.thin)im.userData.thin=1;   // thin: lower graphics settings draw fewer of these
     let sx=0,sz=0;
     sub.forEach((o,i)=>{m.compose(V3(o.x,o.y,o.z),new THREE.Quaternion().setFromEuler(new THREE.Euler(o.rx||0,o.ry||0,o.rz||0,'YXZ')),V3(o.sx,o.sy??o.sx,o.sz??o.sx));im.setMatrixAt(i,m);if(o.col)im.setColorAt(i,c.setRGB(o.col[0],o.col[1],o.col[2]));sx+=o.x;sz+=o.z});
     im.instanceMatrix.needsUpdate=true;if(im.instanceColor)im.instanceColor.needsUpdate=true;
@@ -5079,25 +5079,25 @@ function placeUnderstory(){
     const s=splat(x,z,h,0);if(R()>(s[1]*.95+s[2]*.5)*(1-s[3]))continue;if(gauss(x,z,155,90,13,10)>.35&&R()<.7)continue;
     const sc=rc(.45,1.05),t=rc(.78,1.12);gl.push({x,y:h-.04,z,ry:R()*TAU,sx:sc*1.0,sy:sc*rc(.7,1.5),col:[t*.9,t*.97,t*.7]})}
   const gm=new THREE.MeshStandardMaterial({map:TX.grassB,alphaTest:.5,side:THREE.DoubleSide,roughness:1,vertexColors:true});windPatch(gm,2.2,30,50,true);(WORLD.wetMats=WORLD.wetMats||[]).push(gm);
-  const gim=instanced(gb.geom(),gm,gl,{cast:false,depthTex:TX.grassB,vis:62});WORLD.grass=gl.length;WORLD.grassMesh=gim;
+  const gim=instanced(gb.geom(),gm,gl,{cast:false,depthTex:TX.grassB,vis:62,thin:true});WORLD.grass=gl.length;WORLD.grassMesh=gim;
   // --- wildflowers
   const fb=new GB();for(let k=0;k<2;k++){const a=k*Math.PI/2+.3,ux=Math.cos(a)*.7,uz=Math.sin(a)*.7;GBcardVC(fb,[-ux/2,0,-uz/2],[ux,0,uz],[0,.7,0],[[.7,.8,.6],[.7,.8,.6],[1,1,1],[1,1,1]])}
   const fl=[];tries=0;while(fl.length<(LOWQ?1500:6500)&&tries<160000){tries++;const x=lerp(AREA.x0,AREA.x1,R()),z=lerp(AREA.z0,AREA.z1,R()),h=gh(x,z);if(!free(x,z,h))continue;const s=splat(x,z,h,0);if(R()>s[1]*.8+(gauss(x,z,266,95,42,40)*.6))continue;const sc=rc(.5,1);fl.push({x,y:h-.03,z,ry:R()*TAU,sx:sc,col:[1,1,1]})}
-  const flm=new THREE.MeshStandardMaterial({map:TX.flowers,alphaTest:.5,side:THREE.DoubleSide,roughness:1,vertexColors:true});windPatch(flm,2,26,44,true);WORLD.wetMats.push(flm);instanced(fb.geom(),flm,fl,{cast:false,vis:50});
+  const flm=new THREE.MeshStandardMaterial({map:TX.flowers,alphaTest:.5,side:THREE.DoubleSide,roughness:1,vertexColors:true});windPatch(flm,2,26,44,true);WORLD.wetMats.push(flm);instanced(fb.geom(),flm,fl,{cast:false,vis:50,thin:true});
   // --- ferns
   const fnb=new GB();for(let k=0;k<4;k++){const a=k*Math.PI/4,ux=Math.cos(a)*1.5,uz=Math.sin(a)*1.5;GBcardVC(fnb,[-ux/2,0,-uz/2],[ux,.0,uz],[0,1.15,0],[[.42,.5,.38],[.42,.5,.38],[1,1,1],[1,1,1]])}
   const fnl=[];tries=0;while(fnl.length<(LOWQ?1400:4800)&&tries<800000){tries++;const x=lerp(AREA.x0,AREA.x1,R()),z=lerp(AREA.z0,AREA.z1,R()),h=gh(x,z);if(!free(x,z,h)||h<1.2)continue;const s=splat(x,z,h,0);if(s[0]>.3||s[3]>.4)continue;if(R()>.55+s[2]*.4)continue;if(gauss(x,z,155,90,12,9)>.4)continue;const sc=rc(.6,1.4);fnl.push({x,y:h-.05,z,ry:R()*TAU,sx:sc,col:[rc(.8,1.1),rc(.9,1.1),rc(.75,1)]})}
-  const fnm=new THREE.MeshStandardMaterial({map:TX.fern,alphaTest:.5,side:THREE.DoubleSide,roughness:.95,vertexColors:true});windPatch(fnm,1.6,36,62,true);WORLD.wetMats.push(fnm);instanced(fnb.geom(),fnm,fnl,{cast:false,vis:66});
+  const fnm=new THREE.MeshStandardMaterial({map:TX.fern,alphaTest:.5,side:THREE.DoubleSide,roughness:.95,vertexColors:true});windPatch(fnm,1.6,36,62,true);WORLD.wetMats.push(fnm);instanced(fnb.geom(),fnm,fnl,{cast:false,vis:66,thin:true});
   // --- shrubs
   const bb=new GB();for(let k=0;k<3;k++){const a=k*Math.PI/3,ux=Math.cos(a)*2.0,uz=Math.sin(a)*2.0;GBcardVC(bb,[-ux/2,.05,-uz/2],[ux,0,uz],[0,1.5,0],[[.36,.4,.32],[.36,.4,.32],[1,1,1],[1,1,1]])}GBcardVC(bb,[-.95,.75,-.95],[1.9,0,0],[0,.03,1.9],[[.9,.95,.8],[.9,.95,.8],[1,1,.9],[1,1,.9]]);
   const bl=[];tries=0;while(bl.length<(LOWQ?700:1700)&&tries<800000){tries++;const x=lerp(AREA.x0,AREA.x1,R()),z=lerp(AREA.z0,AREA.z1,R()),h=gh(x,z);if(!free(x,z,h)||h<1.2)continue;const s=splat(x,z,h,0);if(s[0]>.2||s[3]>.4)continue;if(R()>.45)continue;if(nearKeyPts(x,z,4))continue;const sc=rc(.7,1.35);bl.push({x,y:h-.05,z,ry:R()*TAU,sx:sc,col:[rc(.75,1.05),rc(.85,1.05),rc(.7,.95)]});if(sc>1.1)addCol(x,z,.6*sc)}
   const bm=new THREE.MeshStandardMaterial({map:TX.bushLeaf,alphaTest:.5,side:THREE.DoubleSide,roughness:.9,vertexColors:true});windPatch(bm,1.2);WORLD.wetMats.push(bm);instanced(bb.geom(),bm,bl,{cast:true,depthTex:TX.bushLeaf,vis:130});
   // --- litter: pine cones, twigs, mushrooms, fallen mossy logs
   const cg=new THREE.CylinderGeometry(.012,.03,.1,7);cg.translate(0,.05,0);const cl=[];tries=0;while(cl.length<(LOWQ?1200:4200)&&tries<120000){tries++;const x=lerp(AREA.x0,AREA.x1,R()),z=lerp(AREA.z0,AREA.z1,R()),h=gh(x,z);if(!free(x,z,h))continue;const s=splat(x,z,h,0);if(s[2]<.3)continue;cl.push({x,y:h+.012,z,rx:R()*6,ry:R()*TAU,rz:Math.PI/2+rc(-.4,.4),sx:rc(.8,1.5)})}
-  const cm=new THREE.MeshStandardMaterial({map:TX.cone,roughness:.9,bumpMap:TX.cone,bumpScale:1.5});instanced(cg,cm,cl,{cast:false,vis:34});
+  const cm=new THREE.MeshStandardMaterial({map:TX.cone,roughness:.9,bumpMap:TX.cone,bumpScale:1.5});instanced(cg,cm,cl,{cast:false,vis:34,thin:true});
   const tg=new THREE.CylinderGeometry(.006,.012,1,4);tg.translate(0,.5,0);const tl=[];tries=0;while(tl.length<(LOWQ?1500:5000)&&tries<120000){tries++;const x=lerp(AREA.x0,AREA.x1,R()),z=lerp(AREA.z0,AREA.z1,R()),h=gh(x,z);if(!free(x,z,h))continue;const s=splat(x,z,h,0);if(s[2]<.25)continue;tl.push({x,y:h+.02,z,rx:0,ry:R()*TAU,rz:Math.PI/2,sx:rc(.5,1.2),sy:rc(.15,.7),sz:1,col:[rc(.5,.8),rc(.4,.6),rc(.3,.45)]})}
-  instanced(tg,new THREE.MeshStandardMaterial({color:0x6a5a46,roughness:1,vertexColors:false}),tl,{cast:false,vis:34});
-  const mg=new GB(),capm=new THREE.SphereGeometry(.05,10,6,0,TAU,0,Math.PI*.55);capm.translate(0,.09,0);const stm=new THREE.CylinderGeometry(.012,.016,.09,6);stm.translate(0,.045,0);
+  instanced(tg,new THREE.MeshStandardMaterial({color:0x6a5a46,roughness:1,vertexColors:false}),tl,{cast:false,vis:34,thin:true});
+  const mg=new GB(),capm=new THREE.SphereGeometry(.05,8,4,0,TAU,0,Math.PI*.55);capm.translate(0,.09,0);const stm=new THREE.CylinderGeometry(.012,.016,.09,6);stm.translate(0,.045,0);
   const ml=[];tries=0;while(ml.length<(LOWQ?150:520)&&tries<120000){tries++;const x=lerp(AREA.x0,AREA.x1,R()),z=lerp(AREA.z0,AREA.z1,R()),h=gh(x,z);if(!free(x,z,h))continue;const s=splat(x,z,h,0);if(s[2]<.4)continue;ml.push({x,y:h,z,ry:R()*TAU,sx:rc(.7,1.6),col:[1,1,1]})}
   instanced(capm,new THREE.MeshStandardMaterial({color:0xb8895a,roughness:.55}),ml,{cast:false,vis:40});instanced(stm,new THREE.MeshStandardMaterial({color:0xe6dcc6,roughness:.8}),ml,{cast:false,vis:40});
   // fallen logs with moss on top
@@ -6051,12 +6051,12 @@ function sdPrimX(p,x,y,z){
 }
 function sdfEvalX(list,x,y,z){let d=1,first=true;for(const p of list){const di=sdPrimX(p,x,y,z);if(first){d=di;first=false}else d=sMin(d,di,p.k)}return d}
 /* surface nets over the primitive set; returns positions, normals and the faces */
-function sdfNets(prims,min,max,hs){
+function sdfNets(prims,min,max,hs,off=0){
   const cut=.03,nx=Math.ceil((max[0]-min[0])/hs)+2,ny=Math.ceil((max[1]-min[1])/hs)+2,nz=Math.ceil((max[2]-min[2])/hs)+2,val=new Float32Array(nx*ny*nz).fill(1),B=6;
   const near=(x0,y0,z0,x1,y1,z1)=>prims.filter(p=>p.hi[0]+cut>=x0&&p.lo[0]-cut<=x1&&p.hi[1]+cut>=y0&&p.lo[1]-cut<=y1&&p.hi[2]+cut>=z0&&p.lo[2]-cut<=z1);
   for(let bz=0;bz<nz;bz+=B)for(let by=0;by<ny;by+=B)for(let bx=0;bx<nx;bx+=B){
     const x0=min[0]+bx*hs,y0=min[1]+by*hs,z0=min[2]+bz*hs,list=near(x0,y0,z0,x0+B*hs,y0+B*hs,z0+B*hs);if(!list.length)continue;
-    for(let k=bz;k<Math.min(nz,bz+B);k++)for(let j=by;j<Math.min(ny,by+B);j++)for(let i=bx;i<Math.min(nx,bx+B);i++)val[i+nx*(j+ny*k)]=sdfEvalX(list,min[0]+i*hs,min[1]+j*hs,min[2]+k*hs)}
+    for(let k=bz;k<Math.min(nz,bz+B);k++)for(let j=by;j<Math.min(ny,by+B);j++)for(let i=bx;i<Math.min(nx,bx+B);i++)val[i+nx*(j+ny*k)]=sdfEvalX(list,min[0]+i*hs,min[1]+j*hs,min[2]+k*hs)-off}
   const vid=new Int32Array(nx*ny*nz).fill(-1),P=[],E=[[0,1],[2,3],[4,5],[6,7],[0,2],[1,3],[4,6],[5,7],[0,4],[1,5],[2,6],[3,7]],cv=new Float32Array(8);
   for(let k=0;k<nz-1;k++)for(let j=0;j<ny-1;j++)for(let i=0;i<nx-1;i++){
     let m=0;for(let c=0;c<8;c++){const v=val[(i+(c&1))+nx*((j+((c>>1)&1))+ny*(k+(c>>2)))];cv[c]=v;if(v<0)m|=1<<c}
@@ -6249,15 +6249,15 @@ const RIGS={};
 function rigData(kind){
   if(RIGS[kind])return RIGS[kind];
   const sp=SPECIES[kind],B=[];sp.skel(B);const boneIndex={};B.forEach((b,i)=>boneIndex[b[0]]=i);
-  const prims=sp.prims(),mk2=(hs)=>{const net=sdfNets(prims,sp.min,sp.max,hs),d=sdfDress(net,prims,sp,boneIndex),g=new THREE.BufferGeometry();
+  const prims=sp.prims(),mk2=(hs,off=0)=>{const m=off?off+hs:0,net=sdfNets(prims,sp.min.map(v=>v-m),sp.max.map(v=>v+m),hs,off),d=sdfDress(net,prims,sp,boneIndex),g=new THREE.BufferGeometry();
     g.setAttribute('position',new THREE.Float32BufferAttribute(net.P,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(net.N,3));g.setAttribute('color',new THREE.BufferAttribute(d.C,3));
     g.setAttribute('skinIndex',new THREE.Uint16BufferAttribute(d.SI,4));g.setAttribute('skinWeight',new THREE.Float32BufferAttribute(d.SW,4));g.setAttribute('aFlow',new THREE.BufferAttribute(d.F,1));g.setAttribute('aFurK',new THREE.BufferAttribute(d.K,1));g.setAttribute('aDir',new THREE.BufferAttribute(d.Dr,4));g.setIndex(net.I);g.computeBoundingSphere();return g};
-  const base=mk2(sp.hs),c=mk2(sp.coarse);let shell=null;
+  const base=mk2(sp.hs),c=mk2(sp.coarse),far=mk2(sp.coarse*2.2,sp.coarse*.6);let shell=null;
   if(sp.fur){const n=sp.fur.layers,vc=c.attributes.position.count,ic=c.index.count,sg=new THREE.BufferGeometry(),L=new Float32Array(vc*n),I=new Uint32Array(ic*n);
     for(const name of['position','normal','color','skinIndex','skinWeight','aFlow','aFurK','aDir']){const a=c.attributes[name],arr=new a.array.constructor(a.array.length*n);for(let k=0;k<n;k++)arr.set(a.array,k*a.array.length);sg.setAttribute(name,new THREE.BufferAttribute(arr,a.itemSize))}
     for(let k=0;k<n;k++){L.fill((k+1)/n,k*vc,(k+1)*vc);for(let i=0;i<ic;i++)I[k*ic+i]=c.index.array[i]+k*vc}
     sg.setAttribute('aLayer',new THREE.BufferAttribute(L,1));sg.setIndex(new THREE.BufferAttribute(I,1));sg.computeBoundingSphere();shell=sg}
-  RIGS[kind]={sp,B,base,lo:c,shell,baseMat:furBaseMat(sp),shellMat:sp.fur?furShellMat(sp):null};return RIGS[kind];
+  RIGS[kind]={sp,B,base,lo:c,far,shell,baseMat:furBaseMat(sp),shellMat:sp.fur?furShellMat(sp):null};return RIGS[kind];
 }
 function rigMats(kind,vi){const D=rigData(kind);if(!vi)return{b:D.baseMat,s:D.shellMat};D.vm=D.vm||{};if(!D.vm[vi]){const t=D.sp.coats[vi];D.vm[vi]={b:furBaseMat(D.sp,t),s:D.sp.fur?furShellMat(D.sp,t):null}}return D.vm[vi]}
 function makeRig(kind,vi=0){
@@ -6269,14 +6269,25 @@ function makeRig(kind,vi=0){
   const rest={};for(const n in bones)rest[n]=bones[n].position.clone();
   group.userData.rig={kind,bones,mesh,shell,rest,sp:D.sp,ph:Math.random()*6,br:Math.random()*6,pant:0,nk:0,hk:0,yk:0,nod:0,slope:0,ear:0,flick:2+Math.random()*4,look:0,lookT:2};return group;
 }
-/* level of detail: the fur shells only up close, a coarser body further out */
-function rigLOD(rig,d){const D=RIGS[rig.kind],k=rig.kind==='moose'?1.5:rig.kind==='bear'?1.2:1,g=d>30*k?D.lo:D.base;if(rig.mesh.geometry!==g)rig.mesh.geometry=g;
+/* level of detail: the fur shells only up close, a coarser body further out and a much simpler one in the distance */
+function rigLOD(rig,d){const D=RIGS[rig.kind],k=(rig.kind==='moose'?1.5:rig.kind==='bear'?1.2:1)*(Q.tier==='low'?.75:1),g=d>75*k?D.far:d>30*k?D.lo:D.base;if(rig.mesh.geometry!==g)rig.mesh.geometry=g;
   if(rig.shell)rig.shell.visible=d<(Q.tier==='low'?9:Q.tier==='medium'?18:26)*k}
+/* level of detail for the smooth-part animals (birds, ducks, loons, fish, the porcupine): further away they swap to
+   coarser copies of their parts and drop their eyes. Distances widen when the bow zooms in. */
+const PLOD=new Set(),_plv=new THREE.Vector3();
+function lodPrep(g,near,far){const parts=[],eyes=[];g.traverse(o=>{if(!o.isMesh)return;const L=o.geometry.userData.lods;if(L)parts.push([o,[o.geometry,...L]]);else if(o.userData.eye)eyes.push(o)});g.userData.plod={parts,eyes,near,far,lv:-1,quills:null};PLOD.add(g);return g}
+function partsLOD(){
+  const c=GL.cam.position,zk=Math.tan(GL.cam.fov*Math.PI/360)/Math.tan(36*Math.PI/180),q=Q.tier==='low'?.75:Q.tier==='high'?1.2:1;
+  for(const g of PLOD){if(!g.parent){PLOD.delete(g);continue}const L=g.userData.plod,P=g.parent===GL.scene?g.position:_plv.setFromMatrixPosition(g.matrixWorld),d=P.distanceTo(c)*zk/q,lv=d<L.near?0:d<L.far?1:2;
+    if(lv===L.lv)continue;L.lv=lv;for(const [m,gs] of L.parts)m.geometry=gs[Math.min(lv,gs.length-1)];for(const m of L.eyes)m.visible=lv<2;
+    if(L.quills)L.quills.count=lv===0?L.quills.instanceMatrix.count:lv===1?700:260}
+}
 /* build every body during loading and draw each once so no shader compiles mid-game */
 function prebuildCreatures(){for(const k of['wolf','bear','moose'])rigData(k);antlerGeo();grouseParts();duckParts(true);duckParts(false);loonParts();fishParts();porcParts()}
 function warmCreatures(){const grp=new THREE.Group(),list=[makeBeastModel('wolf'),makeBeastModel('bear'),makeMooseModel(),makeBirdModel(),makeDuckModel(true),makeLoon(),makeFishModel(),makePorcupine()];
   list.forEach((m,i)=>{m.position.set(pl.x+Math.sin(pl.yaw)*6+i*.3,-40,pl.z+Math.cos(pl.yaw)*6);m.traverse(o=>{o.frustumCulled=false});grp.add(m)});GL.scene.add(grp);
-  try{GL.ren.compile(GL.scene,GL.cam)}catch(e){}GL.scene.remove(grp)}
+  const lf=[];for(const k in LF.sp)for(const L of LF.sp[k].lv)if(!L.im.visible){L.im.visible=true;lf.push(L.im)}   // the lake fish too, though none are in view yet
+  try{GL.ren.compile(GL.scene,GL.cam)}catch(e){}GL.scene.remove(grp);list.forEach(m=>PLOD.delete(m));lf.forEach(m=>{m.visible=false})}
 /* eyes, antlers and the like are rigid pieces carried by a bone */
 function rigAttach(rig,bone,obj,worldPos){const b=rig.bones[bone];const bp=new THREE.Vector3();const D=RIGS[rig.kind];const rp=D.B.find(q=>q[0]===bone)[2];obj.position.set(worldPos[0]-rp[0],worldPos[1]-rp[1],worldPos[2]-rp[2]);b.add(obj);return obj}
 let GLOWTEX=null;
@@ -6403,17 +6414,24 @@ function birdMat(spot,o={}){
  diffuseColor.rgb*=.9+.2*vn3(r*150.);}`)};
   m.customProgramCacheKey=()=>'birdpat2';return m;
 }
-/* one smooth part: primitives in the part's own space -> geometry with colour and pattern weights */
-function birdPart(prims,min,max,hs,dress){
-  const net=sdfNets(prims,min,max,hs),{P,N}=net,nv=P.length/3,C=new Float32Array(nv*3),A=new Float32Array(nv*4),R=RNG(9);
+/* one smooth part: primitives in the part's own space -> geometry with colour and pattern weights.
+   It also carries coarser copies (geometry.userData.lods) for distant viewing: grown on a wider grid and puffed
+   out a little so thin pieces such as bills, fins and wing feathers do not break up. */
+function birdPart(prims,min,max,hs,dress,lods=[2,3.6]){
+  const g=birdNet(prims,min,max,hs,0,dress);
+  g.userData.lods=lods.map(k=>{const h=hs*k,o=h*.3,m=o+h;return birdNet(prims,[min[0]-m,min[1]-m,min[2]-m],[max[0]+m,max[1]+m,max[2]+m],h,o,dress)});
+  return g;
+}
+function birdNet(prims,min,max,hs,off,dress){
+  const net=sdfNets(prims,min,max,hs,off),{P,N}=net,nv=P.length/3,C=new Float32Array(nv*3),A=new Float32Array(nv*4),R=RNG(9);
   for(let v=0;v<nv;v++){const x=P[v*3],y=P[v*3+1],z=P[v*3+2];let dm=1e9,tag='';for(const p of prims){const d=sdPrimX(p,x,y,z);if(d<dm){dm=d;tag=p.tag}}
     const o=dress(x,y,z,N[v*3],N[v*3+1],N[v*3+2],tag),c=o.c,j=1+(R()-.5)*.05;for(let k=0;k<3;k++)C[v*3+k]=Math.pow(c[k]*j,2.2);const pt=o.p||[0,0,0,0];for(let k=0;k<4;k++)A[v*4+k]=pt[k]}
   const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(P,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(N,3));g.setAttribute('color',new THREE.BufferAttribute(C,3));g.setAttribute('aPat',new THREE.BufferAttribute(A,4));g.setIndex(net.I);g.computeBoundingSphere();return g;
 }
-function mirrorZ(g){const m=g.clone(),p=m.attributes.position,n=m.attributes.normal;for(let i=0;i<p.count;i++){p.setZ(i,-p.getZ(i));n.setZ(i,-n.getZ(i))}const I=m.index.array;for(let t=0;t<I.length;t+=3){const a=I[t+1];I[t+1]=I[t+2];I[t+2]=a}m.computeBoundingSphere();return m}
+function mirrorZ(g){const m=g.clone(),p=m.attributes.position,n=m.attributes.normal;m.userData={};for(let i=0;i<p.count;i++){p.setZ(i,-p.getZ(i));n.setZ(i,-n.getZ(i))}const I=m.index.array;for(let t=0;t<I.length;t+=3){const a=I[t+1];I[t+1]=I[t+2];I[t+2]=a}m.computeBoundingSphere();if(g.userData.lods)m.userData.lods=g.userData.lods.map(mirrorZ);return m}
 const BP={cap:(p,a,b,r0,r1,k,tag)=>p.push(sdfCap(a,b,r0,r1,k,{tag})),ell:(p,c,r,k,tag)=>{const e=sdfEll(c,r,k);e.tag=tag;p.push(e)},oel:(p,c,r,ax,an,k,tag)=>{const e=sdfOEll(c,r,ax,an,k);e.tag=tag;p.push(e)}};
 const BIRDS={};
-function birdEyes(par,pts,r,col){const m=new THREE.MeshStandardMaterial({color:col||0x0a0806,roughness:.06,metalness:.1});for(const p of pts)for(const s of SIDE){const e=new THREE.Mesh(new THREE.SphereGeometry(r,10,8),m);e.position.set(p[0],p[1],p[2]*s);par.add(e)}}
+function birdEyes(par,pts,r,col){const m=new THREE.MeshStandardMaterial({color:col||0x0a0806,roughness:.06,metalness:.1});for(const p of pts)for(const s of SIDE){const e=new THREE.Mesh(new THREE.SphereGeometry(r,10,8),m);e.position.set(p[0],p[1],p[2]*s);e.userData.eye=1;par.add(e)}}
 /* ---- the foolbird: a male spruce grouse, plump and tame, barred grey above, black below, red comb ---- */
 function grouseParts(){
   if(BIRDS.grouse)return BIRDS.grouse;const {cap,ell,oel}=BP,b=[],h=[];
@@ -6442,7 +6460,7 @@ function makeBirdModel(){
   const P=grouseParts(),g=new THREE.Group(),body=new THREE.Mesh(P.body,P.mat);body.position.y=.2;g.add(body);
   const legs=SIDE.map(s=>{const l=new THREE.Mesh(P.leg,P.mat);l.position.set(.02,.1,.05*s);g.add(l);return l});
   const neck=new THREE.Group();neck.position.set(.17,.28,0);neck.add(new THREE.Mesh(P.head,P.mat));birdEyes(neck,[[.052,.125,.038]],.009);g.add(neck);
-  g.userData={neck,body,legs};g.traverse(m=>{if(m.isMesh)m.castShadow=true});return g;
+  g.userData={neck,body,legs};g.traverse(m=>{if(m.isMesh)m.castShadow=true});return lodPrep(g,6,18);
 }
 /* ---- mallards: the drake with his green head, white collar and chestnut breast; the mottled brown hen ---- */
 function duckParts(drake){
@@ -6469,11 +6487,11 @@ function duckParts(drake){
     if(drake){if(y>.06)return{c:mixc3([.07,.3,.15],[.05,.18,.12],sst(.6,-.2,ny)*.5),p:[0,0,0,-1]};if(y>.04)return{c:[.92,.92,.9]};return{c:C.breast}}
     const crown=sst(.165,.19,y),stripe=Math.exp(-Math.pow((y-.158)/.008,2))*sst(-.03,.02,x);
     return{c:mixc3(mixc3([.66,.54,.4],[.3,.22,.15],Math.max(crown,stripe)),[.72,.62,.48],sst(.12,.08,y)*.3),p:[0,0,.6*(1-stripe),0]}});
-  const handL=birdPart(wo,[-.26,-.04,-.05],[.04,.04,.34],.0055,(x,y,z,nx,ny,nz,t)=>ny<-.2?{c:[.78,.78,.76]}:t==='prim'?{c:drake?[.34,.31,.28]:[.38,.31,.24]}:{c:C.wing,p:[0,0,drake?0:.6,0]});
+  const handL=birdPart(wo,[-.26,-.04,-.05],[.04,.04,.34],.0055,(x,y,z,nx,ny,nz,t)=>ny<-.2?{c:[.78,.78,.76]}:t==='prim'?{c:drake?[.34,.31,.28]:[.38,.31,.24]}:{c:C.wing,p:[0,0,drake?0:.6,0]},[2]);
   const wingL=birdPart(w,[-.2,-.04,-.04],[.04,.04,.25],.0065,(x,y,z,nx,ny,nz,t)=>{
     if(ny<-.2)return{c:[.82,.82,.8],p:[0,0,0,0]};
     const sp=t==='inner'?sst(-.08,-.1,x)*sst(.02,.05,z)*sst(.21,.18,z):0,edge=t==='inner'?Math.exp(-Math.pow((x+.085)/.006,2))*sst(.02,.05,z)*sst(.21,.18,z):0;
-    return{c:mixc3(mixc3(C.wing,spec,sp),[.92,.92,.9],edge),p:[0,0,drake?0:.7*(1-sp),0]}});
+    return{c:mixc3(mixc3(C.wing,spec,sp),[.92,.92,.9],edge),p:[0,0,drake?0:.7*(1-sp),0]}},[2]);
   return BIRDS[key]={body,head,wingL,wingR:mirrorZ(wingL),handL,handR:mirrorZ(handL),mat:birdMat(40,{mot:44}),foot:new THREE.MeshStandardMaterial({color:new THREE.Color(0xe08a30).convertSRGBToLinear(),roughness:.7})};
 }
 function makeDuckModel(drake){
@@ -6482,7 +6500,7 @@ function makeDuckModel(drake){
   const wings=[];for(const s of SIDE){const w=new THREE.Group();w.position.set(.02,.19,s*.1);w.add(new THREE.Mesh(s>0?P.wingL:P.wingR,P.mat));
     const o=new THREE.Group();o.position.set(-.03,0,.21*s);o.add(new THREE.Mesh(s>0?P.handL:P.handR,P.mat));w.add(o);w.userData.s=s;w.userData.outer=o;w.visible=false;g.add(w);wings.push(w)}
   const feet=[];for(const s of SIDE){const f=new THREE.Mesh(new THREE.SphereGeometry(.035,8,6),P.foot);f.scale.set(1.2,.2,.9);f.position.set(-.06,.02,s*.05);f.visible=false;g.add(f);feet.push(f)}
-  g.userData={neck,wings,feet,body:bd};g.scale.setScalar(1.7);return g;
+  g.userData={neck,wings,feet,body:bd};g.scale.setScalar(1.7);return lodPrep(g,8,24);
 }
 /* ---- the common loon: black head with a green sheen, striped collar, checkered back, dagger bill, red eye ---- */
 function loonParts(){
@@ -6501,7 +6519,7 @@ function loonParts(){
   return BIRDS.loon={geo,mat:birdMat(24)};
 }
 function makeLoon(){
-  const P=loonParts(),g=new THREE.Group(),m=new THREE.Mesh(P.geo,P.mat);m.castShadow=true;g.add(m);birdEyes(g,[[.6,.45,.062]],.013,0x8a0e0a);return g;
+  const P=loonParts(),g=new THREE.Group(),m=new THREE.Mesh(P.geo,P.mat);m.castShadow=true;g.add(m);birdEyes(g,[[.6,.45,.062]],.013,0x8a0e0a);return lodPrep(g,10,30);
 }
 /* ---- a stream fish: olive back, barred golden sides, pale belly ---- */
 function fishParts(){
@@ -6515,7 +6533,7 @@ function fishParts(){
     return{c:t==='head'?mixc3(c,[.2,.22,.14],sst(.4,.9,ny)*.6):c,p:[0,sst(-.3,.3,ny)*sst(.9,.5,ny)*.8,0,0]}});
   return BIRDS.fish={geo,mat:birdMat(30,{bar:16})};
 }
-function makeFishModel(){const P=fishParts(),g=new THREE.Group(),m=new THREE.Mesh(P.geo,P.mat);g.add(m);birdEyes(g,[[.17,.01,.032]],.008,0x1a1408);return g}
+function makeFishModel(){const P=fishParts(),g=new THREE.Group(),m=new THREE.Mesh(P.geo,P.mat);g.add(m);birdEyes(g,[[.17,.01,.032]],.008,0x1a1408);return lodPrep(g,4,12)}
 /* ---- the porcupine: a low, arched, dark body bristling with pale, dark-tipped quills that lie back ---- */
 function porcParts(){
   if(BIRDS.porc)return BIRDS.porc;const {cap,ell,oel}=BP,p=[];
@@ -6541,7 +6559,7 @@ function porcParts(){
 function makePorcupine(){
   const P=porcParts(),g=new THREE.Group(),body=new THREE.Mesh(P.geo,P.mat);g.add(body);
   const im=new THREE.InstancedMesh(P.q,P.qmat,P.mats.length);P.mats.forEach((m,i)=>im.setMatrixAt(i,m));im.instanceMatrix.needsUpdate=true;g.add(im);
-  birdEyes(g,[[.38,.2,.062]],.012);g.traverse(o=>{if(o.isMesh)o.castShadow=true});return g;
+  birdEyes(g,[[.38,.2,.062]],.012);g.traverse(o=>{if(o.isMesh)o.castShadow=true});lodPrep(g,7,20);g.userData.plod.quills=im;return g;
 }
 /* ================= THE BOW: an ash stave, a shoelace string, fire-hardened willow arrows ================= */
 const ARW={list:[],cool:0,geo:null,mats:null,pickT:0};
@@ -6998,10 +7016,12 @@ function fishSpot(sp,cx,cz,r,R){
 }
 function buildLakeFish(){
   const R=RNG(9191);
-  for(const kind in FISH_SP){const sp=FISH_SP[kind],geo=fishBody(kind),cap=sp.groups*sp.per[1]+2;
-    geo.setAttribute('aSwim',new THREE.InstancedBufferAttribute(new Float32Array(cap*2),2));
-    const im=new THREE.InstancedMesh(geo,fishMat(sp.spot,sp.o),cap);im.count=0;im.frustumCulled=false;im.castShadow=false;im.receiveShadow=false;im.renderOrder=1;
-    im.instanceColor=new THREE.InstancedBufferAttribute(new Float32Array(cap*3).fill(1),3);GL.scene.add(im);LF.sp[kind]={im,geo,cap};
+  for(const kind in FISH_SP){const sp=FISH_SP[kind],geo=fishBody(kind),cap=sp.groups*sp.per[1]+2,mat=fishMat(sp.spot,sp.o);
+    // one instanced mesh per level of detail: the full body up close, coarser copies further out
+    const lv=[geo,...geo.userData.lods].map(g=>{g.setAttribute('aSwim',new THREE.InstancedBufferAttribute(new Float32Array(cap*2),2));
+      const im=new THREE.InstancedMesh(g,mat,cap);im.count=0;im.visible=false;im.frustumCulled=false;im.castShadow=false;im.receiveShadow=false;im.renderOrder=1;
+      im.instanceColor=new THREE.InstancedBufferAttribute(new Float32Array(cap*3).fill(1),3);GL.scene.add(im);return{im,geo:g,sw:g.attributes.aSwim,n:0}});
+    LF.sp[kind]={im:lv[0].im,geo,cap,lv};
     for(let g=0;g<sp.groups;g++){let home=null;for(let k=0;k<60&&!home;k++){const s=fishSpot(sp,LAKE.cx,LAKE.cz,LAKE.rx*.92,R);if(s&&lakeT(s[0],s[2])<.95)home=s}
       if(!home)continue;const n=sp.per[0]+Math.floor(R()*(sp.per[1]-sp.per[0]+1));let lead=null;
       for(let i=0;i<n;i++){const f={kind,sp,x:home[0]+(R()-.5)*2,y:home[1],z:home[2]+(R()-.5)*2,vx:0,vy:0,vz:0,hx:home[0],hz:home[2],tx:home[0],ty:home[1],tz:home[2],t:0,size:sp.L[0]+(sp.L[1]-sp.L[0])*R(),ph:R()*TAU,
@@ -7035,12 +7055,14 @@ function lakeFishUpdate(dt){
     f.x=nx;f.z=nz;f.y=clamp(f.y+f.vy*dt,gh(f.x,f.z)+.25+f.size*.1,-.28);
     f.sw=Math.min(1,Math.hypot(f.vx,f.vz)/(sp.spd*2.5));
   }
-  // draw the fish near the viewer, a few draw calls for the whole lake
-  for(const kind in LF.sp){const S2=LF.sp[kind],im=S2.im,sw=S2.geo.attributes.aSwim;let n=0;
-    if(camNear)for(const f of LF.list){if(f.kind!==kind||f.dead)continue;if((f.x-cam.x)**2+(f.z-cam.z)**2>55*55)continue;if(n>=S2.cap)break;
+  // draw the fish near the viewer, a few draw calls for the whole lake; small or distant fish use the coarser bodies
+  const zk=Math.tan(GL.cam.fov*Math.PI/360)/Math.tan(36*Math.PI/180);
+  for(const kind in LF.sp){const S2=LF.sp[kind];for(const L of S2.lv)L.n=0;
+    if(camNear)for(const f of LF.list){if(f.kind!==kind||f.dead)continue;const d2=(f.x-cam.x)**2+(f.y-cam.y)**2+(f.z-cam.z)**2;if(d2>55*55)continue;
+      const d=Math.sqrt(d2)*zk/f.size,L=S2.lv[d<7?0:d<20?1:2];if(L.n>=S2.cap)continue;
       const h=Math.hypot(f.vx,f.vz),yaw=h>.02?Math.atan2(-f.vz,f.vx):f.yaw||0;f.yaw=yaw;_fe.set(0,yaw,clamp(Math.atan2(f.vy,h+.05),-.5,.5));_fq.setFromEuler(_fe);
-      _fm.compose(_fv.set(f.x,f.y,f.z),_fq,_fs.setScalar(f.size));im.setMatrixAt(n,_fm);im.setColorAt(n,_fc.setScalar(f.tint));sw.setXY(n,f.ph,f.sw||0);n++}
-    im.count=n;if(n){im.instanceMatrix.needsUpdate=true;if(im.instanceColor)im.instanceColor.needsUpdate=true;sw.needsUpdate=true}}
+      _fm.compose(_fv.set(f.x,f.y,f.z),_fq,_fs.setScalar(f.size));L.im.setMatrixAt(L.n,_fm);L.im.setColorAt(L.n,_fc.setScalar(f.tint));L.sw.setXY(L.n,f.ph,f.sw||0);L.n++}
+    for(const L of S2.lv){const im=L.im;im.count=L.n;im.visible=L.n>0;if(L.n){im.instanceMatrix.needsUpdate=true;im.instanceColor.needsUpdate=true;L.sw.needsUpdate=true}}}
 }
 /* the pike: patrols its weed bed; if you swim close it stalks, circles in, darts and bites, then backs off */
 function pikeThink(f,dt,body,dP){
@@ -7618,11 +7640,12 @@ function saveSummary(sv){
 }
 /* ================= GRAPHICS QUALITY, FRAME COUNTER AND AUTO-TUNING ================= */
 const QUAL={
-  high:{pr:1.5,refl:true,ao:true,rays:true,bloom:true,shadow:2048,shInt:.12,near:54,nears:28,under:1,label:'HIGH'},
-  medium:{pr:1,refl:false,ao:false,rays:false,bloom:true,shadow:2048,shInt:.2,near:44,nears:22,under:.78,label:'MEDIUM'},
-  low:{pr:.8,refl:false,ao:false,rays:false,bloom:false,shadow:1024,shInt:.34,near:34,nears:15,under:.55,label:'LOW'}
+  high:{pr:1.5,refl:true,ao:true,rays:true,bloom:true,shadow:2048,shInt:.12,near:54,nears:28,under:1,dens:1,label:'HIGH'},
+  medium:{pr:1,refl:false,ao:false,rays:false,bloom:true,shadow:2048,shInt:.2,near:44,nears:22,under:.78,dens:.8,label:'MEDIUM'},
+  low:{pr:.8,refl:false,ao:false,rays:false,bloom:false,shadow:1024,shInt:.34,near:34,nears:15,under:.55,dens:.5,label:'LOW'}
 };
-const Q={mode:'auto',tier:'medium',fps:60,ms:16.7,worst:0,acc:0,n:0,w:0,wt:0,calls:0,tris:0,show:true,gov:0,govT:0,hold:3,pr:1,stable:0};
+const Q={mode:'auto',tier:'medium',fps:60,ms:16.7,worst:0,acc:0,n:0,w:0,wt:0,calls:0,tris:0,show:true,gov:0,govT:0,hold:3,pr:1,stable:0,gpu:'',ceil:2,good:0,tried:{}};
+const TIERS=['low','medium','high'];
 (function(){try{const m=localStorage.getItem('hatchet.gfx');if(m&&(m==='auto'||QUAL[m]))Q.mode=m;const f=localStorage.getItem('hatchet.fps');if(f==='0')Q.show=false}catch(e){}})();
 function applyQuality(tier){
   const q=QUAL[tier];if(!q||!GL.ren)return;Q.tier=tier;
@@ -7631,16 +7654,23 @@ function applyQuality(tier){
   const sh=GL.sun.shadow;if(sh.mapSize.x!==q.shadow){sh.mapSize.set(q.shadow,q.shadow);if(sh.map){sh.map.dispose();sh.map=null}}
   Q.shInt=q.shInt;GL.shadowStamp=-1e9;if(WORLD.waterMats)for(const w of WORLD.waterMats)w.uniforms.uClouds.value=tier==='high'?1:0;
   VEG.NEAR2=q.near*q.near;VEG.NEARS2=q.nears*q.nears;VEG.px=1e9;
-  for(const m of VEG.under){const u=m.userData;if(u.vis!==undefined)u.vr=VCH*.71+u.vis*q.under}
+  for(const m of VEG.under){const u=m.userData;if(u.vis!==undefined)u.vr=VCH*.71+u.vis*q.under;if(u.thin)m.count=Math.max(1,Math.round(u.n*q.dens))}
   fit();Q.hold=3.5;Q.acc=0;Q.n=0;Q.stable=0;
 }
-function initQuality(){
-  let t=Q.mode==='auto'?((navigator.hardwareConcurrency||4)>=8&&(window.devicePixelRatio||1)<=1.5?'high':'medium'):Q.mode;
-  if(LOWQ)t='low';applyQuality(t);
+/* a first guess from the graphics chip's name: dedicated graphics start on HIGH, laptop chips with stronger built-in
+   graphics on MEDIUM, and everyday Intel graphics, Chromebook, phone and tablet chips on LOW. The governor then
+   lowers it if the frame rate is poor, or tries one step up if it stays smooth. */
+function gpuGuess(){
+  let r='';try{const gl=GL.ren.getContext(),e=gl.getExtension('WEBGL_debug_renderer_info');r=String((e&&gl.getParameter(e.UNMASKED_RENDERER_WEBGL))||gl.getParameter(gl.RENDERER)||'')}catch(e){}
+  Q.gpu=r;if(LOWQ)return 'low';
+  if(/nvidia|geforce|quadro|rtx|radeon\s*(rx|pro|r9|vii)|apple m\d|arc\s*a\d/i.test(r))return 'high';
+  if(/swiftshader|llvmpipe|softpipe|software|basic render|mali|adreno|powervr|videocore|apple a\d|intel/i.test(r)&&!/iris/i.test(r))return 'low';
+  return 'medium';
 }
+function initQuality(){Q.guess=gpuGuess();applyQuality(Q.mode==='auto'?Q.guess:Q.mode)}
 function setGraphics(mode){
   Q.mode=mode;try{localStorage.setItem('hatchet.gfx',mode)}catch(e){}
-  if(mode==='auto'){const t=(navigator.hardwareConcurrency||4)>=8&&(window.devicePixelRatio||1)<=1.5?'high':'medium';applyQuality(LOWQ?'low':t)}else applyQuality(mode);
+  Q.ceil=2;Q.tried={};Q.good=0;applyQuality(mode==='auto'?Q.guess||gpuGuess():mode);
 }
 function cycleGraphics(){const o=['auto','high','medium','low'],n=o[(o.indexOf(Q.mode)+1)%4];setGraphics(n);toast('Graphics: '+(n==='auto'?'Auto ('+QUAL[Q.tier].label+')':QUAL[n].label),2.4)}
 function toggleFps(){Q.show=!Q.show;try{localStorage.setItem('hatchet.fps',Q.show?'1':'0')}catch(e){}}
@@ -7661,8 +7691,15 @@ function qualityGov(raw){
   if(Q.hold>0){Q.hold-=raw;return}
   Q.govT+=raw;Q.gov++;
   if(Q.govT>=2.2){const fps=Q.gov/Q.govT;Q.govT=0;Q.gov=0;
-    if(fps<44){const t=Q.tier;if(t==='high')applyQuality(fps<26?'low':'medium');else if(t==='medium')applyQuality('low');else if(fps<30&&GL.userPR>.55){GL.userPR=Math.max(.55,GL.userPR-.1);Q.pr=GL.userPR;fit();Q.hold=2}
-      if(Q.tier!==t&&scene==='play')toast('Graphics lowered to '+QUAL[Q.tier].label+' to keep the game smooth. Press G to change.',3.4)}}
+    if(fps<44){const t=Q.tier,i=TIERS.indexOf(t),trial=Q.tried[t]&&Q.good<0;Q.good=0;
+      if(trial)applyQuality(TIERS[i-1]);   // the step up was too much: go back
+      else if(t==='high')applyQuality(fps<26?'low':'medium');else if(t==='medium')applyQuality('low');else if(fps<30&&GL.userPR>.55){GL.userPR=Math.max(.55,GL.userPR-.1);Q.pr=GL.userPR;fit();Q.hold=2}
+      Q.ceil=Math.min(Q.ceil,TIERS.indexOf(Q.tier));   // never climb back to a setting that was too slow
+      if(Q.tier!==t&&scene==='play'&&!trial)toast('Graphics lowered to '+QUAL[Q.tier].label+' to keep the game smooth. Press G to change.',3.4)}
+    else if(fps>=56){Q.good=Math.max(0,Q.good)+1;const i=TIERS.indexOf(Q.tier);
+      // smooth for about ten seconds: try the next setting up, once
+      if(Q.good>=4&&i<Q.ceil&&!Q.tried[TIERS[i+1]]&&GL.userPR>=QUAL[Q.tier].pr-.01){Q.tried[TIERS[i+1]]=1;applyQuality(TIERS[i+1]);Q.good=-1}}
+    else if(Q.good>0)Q.good=0}
 }
 function drawFps(g){
   if(!Q.show||scene==='load')return;
@@ -8165,7 +8202,7 @@ function worldUpdate(dt,camPos){
   if(S.sparkFlash>0)S.sparkFlash=Math.max(0,S.sparkFlash-dt*1.4);
   if(S.fl.flyby){S.fl.flyby.t+=dt}
   applyEnv();
-  lodUpdate(camPos.x,camPos.z);poiUpdate(dt);updateFires(dt);updateWreck(dt);syncWorld();loonsUpdate(dt);fishUpdate(dt);
+  lodUpdate(camPos.x,camPos.z);partsLOD();poiUpdate(dt);updateFires(dt);updateWreck(dt);syncWorld();loonsUpdate(dt);fishUpdate(dt);
   // camera-relative effects
   const cx=camPos.x,cy=camPos.y,cz=camPos.z;
   if(Math.random()<dt*7*nightF(S.tod)*(1-S.storm)&&scene!=='flight')PSA.spawn(cx+rnd(-16,16),gh(cx,cz)+rnd(.4,3),cz+rnd(-16,16),rnd(-.2,.2),rnd(-.1,.2),rnd(-.2,.2),rnd(3,5),.09,[.75,1,.4],0,0,.8);
