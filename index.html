@@ -4256,7 +4256,7 @@ function waterDepthAt(x,z){ // positive = under water, for gameplay (wading/bloc
 /* ================= SCENE OBJECTS ================= */
 const WORLD={trees:[],cols:new Map(),sky:null,sun:null,moon:null,hemi:null,water:[],fires:[],shelter:null,wreck:null,floatplane:null,snags:[],deadfalls:[],stumps:[],bushes:{},ready:false,rockCols:[]};
 const CC=6;const ckey=(ix,iz)=>ix*4096+iz;
-function addCol(x,z,r){const ix=Math.floor(x/CC),iz=Math.floor(z/CC),k=ckey(ix,iz);let a=WORLD.cols.get(k);if(!a)WORLD.cols.set(k,a=[]);a.push({x,z,r})}
+function addCol(x,z,r){const ix=Math.floor(x/CC),iz=Math.floor(z/CC),k=ckey(ix,iz);let a=WORLD.cols.get(k);if(!a)WORLD.cols.set(k,a=[]);const c={x,z,r};a.push(c);return c}
 function colliders(x,z){const out=[],ix=Math.floor(x/CC),iz=Math.floor(z/CC);for(let a=-1;a<=1;a++)for(let b=-1;b<=1;b++){const l=WORLD.cols.get(ckey(ix+a,iz+b));if(l)for(const c of l)out.push(c)}return out}
 const LM={sand:null};
 function splat(x,z,h,sl){
@@ -5013,8 +5013,8 @@ function buildTreeAssets(){
 function lodUpdate(x,z,force){
   if(!VEG.ready)return;const dx=x-VEG.px,dz=z-VEG.pz;if(!force&&dx*dx+dz*dz<36)return;VEG.px=x;VEG.pz=z;
   for(const k in VEG.near)for(const e of VEG.near[k])e.n=0;for(const k in VEG.far)VEG.far[k].n=0;
-  for(const t of VEG.items){const d2=(t.x-x)*(t.x-x)+(t.z-z)*(t.z-z);
-    if(d2<(t.s>.55?VEG.NEAR2:VEG.NEARS2)){const e=VEG.near[t.kind][t.v];if(e.n<e.cap){e.f.setMatrixAt(e.n,t.m);e.t.setMatrixAt(e.n,t.m);e.f.setColorAt(e.n,t.c);e.t.setColorAt(e.n,t.c);e.n++}}
+  for(const t of VEG.items){t.slot=null;if(t.cut)continue;const d2=(t.x-x)*(t.x-x)+(t.z-z)*(t.z-z);
+    if(d2<(t.s>.55?VEG.NEAR2:VEG.NEARS2)){const e=VEG.near[t.kind][t.v];if(e.n<e.cap){t.slot={e,i:e.n};e.f.setMatrixAt(e.n,t.m);e.t.setMatrixAt(e.n,t.m);e.f.setColorAt(e.n,t.c);e.t.setColorAt(e.n,t.c);e.n++}}
     else if(t.s>.55){const f=VEG.far[t.kind];if(f.n<f.cap){f.m.setMatrixAt(f.n,t.mb);f.n++}}}
   for(const k in VEG.near)for(const e of VEG.near[k]){e.f.count=e.t.count=e.n;e.f.instanceMatrix.needsUpdate=e.t.instanceMatrix.needsUpdate=true;if(e.f.instanceColor){e.f.instanceColor.needsUpdate=e.t.instanceColor.needsUpdate=true}}
   for(const k in VEG.far){const f=VEG.far[k];f.m.count=f.n;f.m.instanceMatrix.needsUpdate=true}
@@ -5036,7 +5036,7 @@ function placeVegetation(){
     d*=1-.85*sstep(.6,.68,fbm(x*.012+40,z*.012+11,3));if(h>34)d*=.1;else if(h>17)d*=.55;if(Math.abs(z-30)<12&&x>-30&&x<60)d*=.5;return d};
   const VARS={spruce:3,pine:2,birch:2};
   const add=(x,z,kind,s,sapling,vv)=>{const y=gh(x,z),v=vv!==undefined?vv:(R()*VARS[kind])|0,sy=s*(.92+R()*.22),m=MTX(x,y-.08,z,0,R()*TAU,0,s,sy,s),k=.82+R()*.2,c=new THREE.Color(k*(.92+R()*.1),k,k*(.9+R()*.1)),mb=MTX(x,y-.05,z,0,R()*TAU,0,s*(.95+R()*.1),sy,s);
-    VEG.items.push({x,z,y,kind,v,s,m,mb,c});if(!sapling){addCol(x,z,.4*Math.min(1.35,s));}take(x,z)};
+    const t={x,z,y,kind,v,s,m,mb,c};VEG.items.push(t);if(!sapling){t.col=addCol(x,z,.4*Math.min(1.35,s));}take(x,z)};
   KEY.bark.forEach(([x,z])=>add(x,z,'birch',1.0,false));
   POIS.filter(p=>p.big).forEach(p=>add(p.x,p.z,'pine',3.2,false,2));
   const total=LOWQ?2300:3800;let tries=0,placed=0;
@@ -5047,7 +5047,7 @@ function placeVegetation(){
   const sap=LOWQ?900:2000;tries=0;placed=0;
   while(placed<sap&&tries<160000){tries++;const x=lerp(AREA.x0,AREA.x1,R()),z=lerp(AREA.z0,AREA.z1,R());if(R()>dens(x,z)*.9)continue;if(nearKey(x,z))continue;if(nearKeyPts(x,z,4))continue;
     const k=R(),kind=k<.55?'spruce':k<.75?'pine':'birch';add(x,z,kind,.14+R()*.3,true);placed++}
-  buildTreeAssets();VEG.ready=true;lodUpdate(KEY.spawn[0],KEY.spawn[1],true);
+  buildTreeAssets();VEG.ready=true;lodUpdate(KEY.spawn[0],KEY.spawn[1],true);treesInit();
 }
 /* ---------- understory ---------- */
 const VCH=80;
@@ -5961,6 +5961,7 @@ function swingHatchet(){
     const b=S.open?beastTarget(3.7,.2):null;if(b&&!pl.dead){Snd.chop();beastHit(b,b.kind==='wolf'?24:20);camS.shake=.2;hitSomething=true;if(!b.dead&&b.kind==='bear'&&b.state==='charge'){b.state='recover';b.t=0}}
     if(!hitSomething)for(const bd of birds){if(bd.dead)continue;const dx=bd.x-pl.x,dz=bd.z-pl.z,d=Math.hypot(dx,dz);if(d<3.4&&(dx*f.x+dz*f.z)/(d||1)>.3){killBird(bd,false);Snd.chop();hitSomething=true;break}}
     if(!hitSomething)for(const dk of ducks){if(dk.dead)continue;const dx=dk.x-pl.x,dz=dk.z-pl.z,d=Math.hypot(dx,dz);if(d<3.4&&(dx*f.x+dz*f.z)/(d||1)>.3){killDuck(dk);Snd.chop();hitSomething=true;break}}
+    if(!hitSomething){const t=treeTarget();if(t){treeHit(t);hitSomething=true}}
     if(!hitSomething){const px=pl.x+f.x*1.9,pz=pl.z+f.z*1.9,gy=gh(px,pz);Snd.step('soil');burst(px,gy+.1,pz,3,1.1,.4,.05,[.6,.5,.38],false,-5)}})}
 function beastsHitBy(pos,dmgBase){
   for(const b of beasts){if(b.dead)continue;const o=BST[b.kind];if(Math.hypot(pos.x-b.x,pos.z-b.z)<o.r+.35&&pos.y<b.y+(b.kind==='bear'?1.8:1.1)&&pos.y>b.y-.1){beastHit(b,dmgBase*(b.kind==='bear'?.8:1),true);return b}}return null}
@@ -6841,6 +6842,85 @@ function diveEnv(){
   PE.tint.setRGB(.62,.98,.92);PE.sat=.78;PE.ex*=.86-.2*deep;PE.vig=.75;
   Snd.set('wind',0);Snd.set('water',.28);Snd.set('cricket',0);Snd.set('rain',0);
 }
+/* ================= CHOPPING DOWN TREES =================
+   Every tree in the forest can be felled with the hatchet. Each swing at a trunk bites a little deeper (big trees
+   take more swings), the tree creaks, tips away from Brian and crashes down, leaving a stump and giving wood:
+   logs and branches, plus birch bark from birches. Saplings come down in one swing for a bundle of branches.
+   The trees you have felled are remembered in S.fl.felled, so a saved game keeps its clearings. */
+const TREE={grid:new Map(),sig:null,fall:[],hud:0,hk:0,stumps:null,ready:false};
+const TREE_CELL=8,tkey=(x,z)=>Math.floor(x/TREE_CELL)+','+Math.floor(z/TREE_CELL);
+const treeNeed=t=>t.s<=.55?1:t.s>2?12:Math.round(2+t.s*3);   // swings to fell it
+const treeName=t=>t.s<=.55?'sapling':t.kind==='birch'?'birch':t.kind==='pine'?'pine':'spruce';
+function treesInit(){
+  VEG.items.forEach((t,i)=>{t.i=i;const k=tkey(t.x,t.z);let a=TREE.grid.get(k);if(!a)TREE.grid.set(k,a=[]);a.push(t)});
+  // stumps: one instanced cylinder, bark on the side and pale end grain on top
+  const sg=new THREE.CylinderGeometry(.82,1,1,12,1);sg.translate(0,.5,0);
+  const bark=new THREE.MeshStandardMaterial({map:TX.barkS,roughness:.95}),grain=new THREE.MeshStandardMaterial({map:TX.endgrain,roughness:.9});
+  const im=new THREE.InstancedMesh(sg,[bark,grain,grain],900);im.count=0;im.castShadow=true;im.receiveShadow=true;im.frustumCulled=false;GL.scene.add(im);TREE.stumps=im;
+  TREE.ready=true;treesSync(true);
+}
+/* the standing tree in front of Brian, within reach of a swing */
+function treeTarget(reach=1.65,cone=.55){
+  const f=fwdV(),cx=Math.floor(pl.x/TREE_CELL),cz=Math.floor(pl.z/TREE_CELL);let best=null,bd=1e9;
+  for(let a=-1;a<=1;a++)for(let b=-1;b<=1;b++){const l=TREE.grid.get((cx+a)+','+(cz+b));if(!l)continue;
+    for(const t of l){if(t.cut)continue;const dx=t.x-pl.x,dz=t.z-pl.z,d=Math.hypot(dx,dz),r=t.col?t.col.r:.15;if(d-r>reach||d<1e-3)continue;if((dx*f.x+dz*f.z)/d<cone)continue;if(d<bd){bd=d;best=t}}}
+  return best;
+}
+/* bring the world in line with S.fl.felled (a new game, a loaded save or a restarted chapter all change it) */
+function treesSync(force){
+  if(!TREE.ready)return;const list=S.fl&&S.fl.felled||[];  if(!force&&list===TREE.list&&list.length===TREE.len)return;TREE.list=list;TREE.len=list.length;
+  const set=new Set(list);
+  for(const t of VEG.items){const cut=set.has(t.i);if(cut===!!t.cut)continue;t.cut=cut;t.hits=0;
+    if(t.col){const k=ckey(Math.floor(t.col.x/CC),Math.floor(t.col.z/CC)),a=WORLD.cols.get(k);if(cut){if(a){const j=a.indexOf(t.col);if(j>=0)a.splice(j,1)}}else if(a&&a.indexOf(t.col)<0)a.push(t.col)}}
+  // stumps for every felled tree that had a trunk worth leaving
+  const m=new THREE.Matrix4(),q=new THREE.Quaternion();let n=0;
+  for(const i of list){const t=VEG.items[i];if(!t||t.s<=.55||n>=900)continue;const r=.17*t.s,h=.32+.1*t.s;q.setFromAxisAngle(V3(0,1,0),t.i*1.7);m.compose(V3(t.x,t.y-.06,t.z),q,V3(r,h,r));TREE.stumps.setMatrixAt(n++,m)}
+  TREE.stumps.count=n;TREE.stumps.instanceMatrix.needsUpdate=true;
+  VEG.px=1e9;lodUpdate(pl.x,pl.z,true);
+}
+/* a swing that lands on a tree */
+function treeHit(t){
+  t.hits=(t.hits||0)+1;const need=treeNeed(t),y=gh(t.x,t.z)+.9;Snd.chop();camS.shake=.12;TREE.hud=1.6;TREE.hk=t.hits/need;TREE.ht=t;
+  chips(t.x-(t.x-pl.x)*.25,y,t.z-(t.z-pl.z)*.25,8+t.hits,t.kind==='birch'?[.9,.88,.8]:[.8,.66,.45]);t.shake=1;
+  if(t.hits>=need)treeFell(t);
+  else if(t.hits===1&&need>2&&!S.fl.chopTip){S.fl.chopTip=1;toast(`It will take about ${need} swings to bring this ${treeName(t)} down. Keep chopping!`,3)}
+}
+function treeFell(t){
+  if(!S.fl.felled)S.fl.felled=[];S.fl.felled.push(t.i);treesSync();   // marks it cut, takes its trunk out of the way and leaves a stump
+  if(t.s<=.55){S.inv.branches=(S.inv.branches|0)+1;Snd.pick();burst(t.x,t.y+.5,t.z,10,1.6,.6,.06,[.3,.45,.22],false,-6,1.2);toast('Sapling down: +1 bundle of branches',2.4);return}
+  // the trunk tips away from Brian, slowly at first, then crashes down
+  const e=VEG.near[t.kind][t.v],dir=V3(t.x-pl.x,0,t.z-pl.z).normalize(),axis=V3(dir.z,0,-dir.x),fm=new THREE.InstancedMesh(e.f.geometry,e.f.material,1),tm=new THREE.InstancedMesh(e.t.geometry,e.t.material,1);
+  for(const m of[fm,tm]){m.instanceColor=new THREE.InstancedBufferAttribute(new Float32Array([t.c.r,t.c.g,t.c.b]),3);m.frustumCulled=false;m.castShadow=true;m.receiveShadow=true;GL.scene.add(m)}
+  fm.customDepthMaterial=e.f.customDepthMaterial;
+  TREE.fall.push({t,fm,tm,axis,dir,a:0,age:0,landed:false,base:V3(t.x,t.y-.08,t.z),H:e.H*t.s});
+  Snd.creak();after(.5,()=>Snd.creak());
+}
+const _tq=new THREE.Quaternion(),_tm=new THREE.Matrix4(),_tm2=new THREE.Matrix4();
+function treesUpdate(dt){
+  if(!TREE.ready)return;treesSync();TREE.hud=Math.max(0,TREE.hud-dt);
+  for(let i=TREE.fall.length-1;i>=0;i--){const F=TREE.fall[i];F.age+=dt;const T1=1.5,top=Math.PI/2-.07;
+    if(F.age<T1){const k=F.age/T1;F.a=top*k*k}
+    else{if(!F.landed){F.landed=true;treeLanded(F)}const b=F.age-T1;F.a=top-.06*Math.exp(-b*5)*Math.abs(Math.sin(b*14))}
+    const sink=F.age>9?Math.min(.9,(F.age-9)*.6):0;
+    _tq.setFromAxisAngle(F.axis,F.a);_tm.makeRotationFromQuaternion(_tq);_tm.setPosition(F.base.x,F.base.y-sink,F.base.z);_tm2.makeTranslation(-F.base.x,-F.base.y,-F.base.z).premultiply(_tm).multiply(F.t.m);
+    F.fm.setMatrixAt(0,_tm2);F.tm.setMatrixAt(0,_tm2);F.fm.instanceMatrix.needsUpdate=F.tm.instanceMatrix.needsUpdate=true;
+    if(F.age>10.5){GL.scene.remove(F.fm);GL.scene.remove(F.tm);TREE.fall.splice(i,1)}}
+  // a tree that was just hit shudders
+  for(const t of VEG.items){if(!t.shake)continue;t.shake=Math.max(0,t.shake-dt*3);const s=t.slot;if(!s||t.cut){t.shake=0;continue}
+    const w=Math.sin(t.shake*28)*.03*t.shake;_tq.setFromAxisAngle(V3(1,0,0),w);_tm.makeRotationFromQuaternion(_tq);_tm.setPosition(t.x,t.y,t.z);_tm2.makeTranslation(-t.x,-t.y,-t.z).premultiply(_tm).multiply(t.m);
+    s.e.f.setMatrixAt(s.i,_tm2);s.e.t.setMatrixAt(s.i,_tm2);s.e.f.instanceMatrix.needsUpdate=s.e.t.instanceMatrix.needsUpdate=true}
+}
+function treeLanded(F){
+  const t=F.t,d=Math.hypot(t.x-pl.x,t.z-pl.z);Snd.thud();Snd.noise(.6,700,.35);if(d<30)camS.shake=Math.max(camS.shake,.5*(1-d/30));
+  for(let k=0;k<5;k++){const r=F.H*(.3+k*.15),x=t.x+F.dir.x*r,z=t.z+F.dir.z*r;burst(x,gh(x,z)+.4,z,8,2.2,.7,.08,t.kind==='birch'?[.45,.55,.25]:[.22,.34,.18],false,-5,1.2)}
+  const logs=t.s>2?6:t.s>1.15?3:2;S.inv.wood=(S.inv.wood|0)+logs;S.inv.branches=(S.inv.branches|0)+1;let extra='';
+  if(t.kind==='birch'){S.inv.tinder=(S.inv.tinder|0)+1;extra=', +1 birch bark'}
+  S.stats.trees=(S.stats.trees|0)+1;Snd.pick();toast(`Timber! +${logs} logs, +1 bundle of branches${extra}`,3);
+}
+/* the prompt that tells you the hatchet can take a tree down */
+function treeIAs(){
+  addIA({test:()=>pl.hasH&&!pl.dive&&!pl.swim&&(S.weapon||'hatchet')==='hatchet'&&!!treeTarget(1.3,.8),pri:-10,pr:()=>{const t=treeTarget(1.3,.8);return t?`Chop down the ${treeName(t)} (${TOUCH?'tap AXE':'click'})`:null},act:()=>swingHatchet()});
+}
 /* ================= PEOPLE: the Ready Player Me avatar from the three.js examples ================= */
 const PEOPLE={ready:false,failed:false};
 const AX={x:new THREE.Vector3(1,0,0),y:new THREE.Vector3(0,1,0),z:new THREE.Vector3(0,0,1)};
@@ -7460,7 +7540,7 @@ addIA({pos:KEY.pit,r:4,pr:()=>S.fire&&(S.inv.meat>0||S.inv.fish>0)?'Cook and eat
 addIA({test:()=>pl.z>18&&pl.z<205&&Math.abs(pl.x-streamX(pl.z))<5.5,r:0,pr:()=>chk(5,8)&&!S.cut?'Spear a fish':null,act:()=>{startMini('fish',ok=>{if(ok){S.inv.fish++;S.stats.fish++;toast('Caught a fish! Cook it at the fire.',4)}})}});
 addIA({pos:KEY.eggs,r:4.5,pr:()=>chk(6)&&!S.fl.eggs?'Dig for turtle eggs':null,act:()=>{anim('reach',2.8,1);Snd.noise(.4,900,.1);for(let i=0;i<9;i++)after(i*.3,()=>chips(KEY.eggs[0]+rnd(-.6,.6),gh(KEY.eggs[0],KEY.eggs[1])+.1,KEY.eggs[1]+rnd(-.6,.6),5,[.8,.72,.55]));
   if(!moose){spawnMoose(334,128);moose.tx=KEY.eggs[0]+16;moose.tz=KEY.eggs[1]-3}after(2.7,()=>{S.fl.eggs=1;S.hunger=Math.min(100,S.hunger+30);Snd.pick();toast('Turtle eggs! But something big is watching you...',4)})}});
-diveIAs();
+diveIAs();treeIAs();
 addIA({pos:KEY.pit,r:5.5,pr:()=>chk(9)&&S.inv.elt&&!S.eltOn?'Switch on the transmitter':null,act:()=>{anim('reach',1.3,1);after(.9,()=>{S.eltOn=true;Snd.good();Snd.tone(1200,.1,'square',.1,0,.15);Snd.tone(1200,.1,'square',.1,0,.4)})}});
 KEY.snag.forEach((p,i)=>addIA({pos:p,r:3.2,pr:()=>{const st=WORLD.snags[i];return chk(9)&&S.eltOn&&st&&st.cut<3?'Chop dry wood':null},act:()=>{const st=WORLD.snags[i];chopAct(st,()=>{S.inv.signal++;toast(`Signal wood: ${S.inv.signal}/3`)})}}));
 addIA({pos:KEY.signal,r:5,pr:()=>chk(9)&&S.eltOn&&!S.fl.signalLit?(S.inv.signal>=3?'Light the signal fire':'!Chop 3 dry snags on the hill first'):null,act:()=>{startMini('fire',ok=>{if(ok){S.fl.signalLit=1;Snd.good()}},{need:2})}});
@@ -7538,6 +7618,8 @@ function drawHUD(g){
   const items=[['HATCHET',pl.hasH?1:0,'#cfd5d8'],['BOW',S.fl.bow?1:0,'#d8bd8e'],['ASH STAVE',S.inv.stave|0,'#c9b48a'],['WILLOW SHOOTS',S.inv.shoots|0,'#9aa860'],['FEATHERS',S.fl.fletched?0:S.inv.feathers|0,'#b8b2a4'],['BRANCHES',S.inv.branches,'#8a6a42'],['BIRCH BARK',S.inv.tinder,'#e8e2cc'],['DRY LOGS',S.inv.wood,'#b08850'],['RAW BIRD',S.inv.meat,'#c88a6a'],['FISH',S.inv.fish,'#8ab0c0'],['SIGNAL WOOD',S.inv.signal,'#b08850'],['MED KIT',S.inv.medkit|0,'#e0453a'],['SURVIVAL PACK',S.inv.pack,'#c6561f'],['TRANSMITTER',S.inv.elt,S.eltOn&&Math.sin(T*5)>0?'#ff4030':'#e8863a']];
   let x=24;const y=H-46;g.font=`600 15px ${FU}`;
   for(const[n,c,col]of items){if(!c&&n!=='HATCHET')continue;const lab=n==='HATCHET'?(pl.hasH?n:n+' (thrown)'):n==='BOW'?`BOW · ${S.inv.arrows|0} ARROW${(S.inv.arrows|0)===1?'':'S'}`:(c>1?`${n} ×${c}`:n),w=g.measureText(lab).width+34;g.fillStyle='rgba(8,10,8,.62)';rr(g,x,y,w,28,14);g.fill();if(S.fl.bow&&((n==='BOW')===((S.weapon||'hatchet')==='bow'))&&(n==='BOW'||n==='HATCHET')){g.strokeStyle='#e8863a';g.lineWidth=2;g.stroke()}g.fillStyle=col;g.beginPath();g.arc(x+15,y+14,5,0,TAU);g.fill();g.fillStyle='#ece6d2';g.fillText(lab,x+26,y+19);x+=w+8}
+  // how deep the hatchet has bitten into the tree being chopped
+  if(TREE.hud>0&&TREE.hk<1){const a=Math.min(1,TREE.hud*1.5),cx=W/2,cy=H/2;g.globalAlpha=a;g.strokeStyle='rgba(0,0,0,.45)';g.lineWidth=5;g.beginPath();g.arc(cx,cy,20,0,TAU);g.stroke();g.strokeStyle='#d9a35a';g.beginPath();g.arc(cx,cy,20,-Math.PI/2,-Math.PI/2+TAU*TREE.hk);g.stroke();g.globalAlpha=1}
   // air while under water
   if(pl.dive||(S.breath??1)<.995){const b=S.breath??1,n=10,bw=22,x0=W/2-n*bw/2,yb=H-118;g.fillStyle='rgba(8,10,8,.55)';rr(g,x0-48,yb-16,n*bw+60,32,16);g.fill();
     g.font=`700 14px ${FU}`;g.textAlign='left';g.fillStyle=b<.3&&Math.sin(T*9)>0?'#ff6a50':'rgba(236,230,210,.85)';g.fillText('AIR',x0-38,yb+5);
@@ -7775,7 +7857,7 @@ async function ch4(){
   await begin({name:'Chapter Four',title:'CHAPTER FOUR',sub:'Fire — Day 2',x:KEY.shelter[0],z:KEY.shelter[1]-3.5,look:[110,40],limitR:200,msg:'',day:2,tod:7,todTo:14,rate:.03,hint:`${U('E')} to interact · again to swing when chopping`,mark:()=>{const m=[];if(S.inv.tinder<2)KEY.bark.forEach((p,i)=>{if(!S.fl['bark'+i])m.push([p[0],p[1],'Birch'])});if(S.inv.wood<3)KEY.stump.forEach((p,i)=>{if(WORLD.stumps[i].cut<3)m.push([p[0],p[1],'Stump'])});if(!S.fire&&S.inv.tinder>=2&&S.inv.wood>=3)m.push([KEY.strike[0],KEY.strike[1],'Rock']);return m}});
   S.inv.tinder=0;S.inv.wood=0;pl.quills=1;
   if(!S.retry)await say(['Morning. His legs ache where the quills went in, and his stomach is a hollow drum, but he can only think about those sparks.','Sparks need something to catch. The papery bark of the birch trees in the thicket makes perfect tinder, and dry, dead wood will keep a flame alive.']);
-  setGoals([{t:()=>`Peel birch bark in the thicket (${S.fire?2:Math.min(2,S.inv.tinder)}/2)`,d:()=>S.inv.tinder>=2||S.fire},{t:()=>`Chop dry wood from the stumps (${S.fire?3:Math.min(3,S.inv.wood)}/3)`,d:()=>S.inv.wood>=3||S.fire},{t:'Strike a fire with the hatchet at the rock wall',d:()=>S.fire}]);
+  setGoals([{t:()=>`Peel birch bark in the thicket (${S.fire?2:Math.min(2,S.inv.tinder)}/2)`,d:()=>S.inv.tinder>=2||S.fire},{t:()=>`Chop wood from the stumps or a tree (${S.fire?3:Math.min(3,S.inv.wood)}/3)`,d:()=>S.inv.wood>=3||S.fire},{t:'Strike a fire with the hatchet at the rock wall',d:()=>S.fire}]);
   await until(goalsDone);pl.quills=0;await wait(1.2);
   await say(['The tinder smokes, glows, and then catches. A flicker. A flame.','For the first time since the crash, Brian is warm. The night is not nearly as large as it was yesterday.']);
   await endChapter();
@@ -7936,7 +8018,7 @@ function worldUpdate(dt,camPos){
   if(Math.random()<dt*7*nightF(S.tod)*(1-S.storm)&&scene!=='flight')PSA.spawn(cx+rnd(-16,16),gh(cx,cz)+rnd(.4,3),cz+rnd(-16,16),rnd(-.2,.2),rnd(-.1,.2),rnd(-.2,.2),rnd(3,5),.09,[.75,1,.4],0,0,.8);
   if(S.stormRun&&S.storm>.2)for(let i=0;i<S.storm*2.2;i++)PSN.spawn(cx-rnd(8,22),cy+rnd(-1,5),cz+rnd(-16,16),rnd(10,17),rnd(-1,2),rnd(-3,3),rnd(1.6,2.6),rnd(.06,.14),[.32,.42,.2],-.3,0,.9);
   if(S.mosq&&scene==='play'&&!nearFire(16)&&pl.x<150)for(let i=0;i<2;i++)PSN.spawn(cx+rnd(-.7,.7),cy+rnd(-.5,.5),cz+rnd(-.7,.7),rnd(-1.5,1.5),rnd(-1,1),rnd(-1.5,1.5),.35,.012,[.05,.05,.05],0,0,.9);
-  ducksUpdate(dt);arrowsUpdate(dt);farWalk();diveEnv();
+  ducksUpdate(dt);arrowsUpdate(dt);farWalk();diveEnv();treesUpdate(dt);
   PSN.update(dt);PSA.update(dt);
   const rain=GL.rain,rk=S.open?WX.rain:S.storm;rain.visible=rk>.1;rain.material.uniforms.uAlpha.value=clamp(rk*1.2,0,1);rain.material.uniforms.uCam.value.set(cx,cy,cz);rain.material.uniforms.uSlant.value.set(.28+(S.open?WX.wind:S.storm)*.4,0);
   const tn=GL.tornado;tn.visible=S.tornado>=0;if(tn.visible){tn.position.set(S.tornPos.x,gh(S.tornPos.x,S.tornPos.z)-2,S.tornPos.z);tn.scale.setScalar(S.tornPos.s);tn.material.uniforms.uAlpha.value=clamp(S.storm*1.1,0,.95)}
@@ -8006,7 +8088,7 @@ async function boot(){
   window.__bt=[];for(let i=0;i<BUILD3D.length;i++){await new Promise(r=>setTimeout(r,12));const t0=performance.now();try{BUILD3D[i]();window.__bt.push([i,Math.round(performance.now()-t0)])}catch(e){console.error('build step',i,e);LOADMSG='Could not start the 3D view.';return}LOADK=(i+1)/BUILD3D.length;LOADMSG=msgs[Math.floor(LOADK*msgs.length*.999)]}
   loadSaves();saveInit();if(SaveSys.saved.story&&!SaveSys.saved.open)S.menu=1;
   fit();scene='title';placePlayer(KEY.spawn[0],KEY.spawn[1],0);S.tod=18.7;FADE.a=1;FADE.to=0;FADE.sp=1;
-  window.__game={POND,streamX,colliders,canAct,getT:()=>T,SWIM,KIT,kitMarker,DIVE,SUNK,diveStart,wreckCollide,kitWorld,canSwim,farShow,FL_PASS,makePerson,dressPilot,loadPeople,FAR,farH,flGround,farTrees,FL_DIR,FL_GO,FL_LAKE,dlgTime,makeRig,RIGS,SPECIES,quadGait,makeBeastModel,makeMooseModel,makeBirdModel,makeDuckModel,makeLoon,makePorcupine,BVM,ARW,setWeapon,shootArrow,BOWC,fish,makeAL60,PEOPLE,ducks,spawnDuck,killDuck,qualityGov,frameStats,Q,QUAL,applyQuality,setGraphics,SaveSys,persistSave,snapOpen,saveOpenNow,openResume,beasts,spawnBeast,beastHit,TERR,WX,WXT,wxSet,lightningStrike,get VM(){return VM},POIS,TX,VEG,S,pl,cam:GL.cam,GL,WORLD,CHS,KEY,newGame,runFrom,FL,IA,DLG,hat,get moose(){return moose},get birds(){return birds},get scene(){return scene},set scene(v){scene=v},MINI,say,startMini,spawnMoose,spawnBird,get ia(){return ia},ENVS,PSN,PSA,FADE,POST,CARD,facingWater,waterDepthAt,gh,step:stepSim,render:renderNow,press:k=>{hit[k]=true},down:c=>keysDown.add(c),up:c=>keysDown.delete(c),look};
+  window.__game={TREE,VEG,treeTarget,treeHit,POND,streamX,colliders,canAct,getT:()=>T,SWIM,KIT,kitMarker,DIVE,SUNK,diveStart,wreckCollide,kitWorld,canSwim,farShow,FL_PASS,makePerson,dressPilot,loadPeople,FAR,farH,flGround,farTrees,FL_DIR,FL_GO,FL_LAKE,dlgTime,makeRig,RIGS,SPECIES,quadGait,makeBeastModel,makeMooseModel,makeBirdModel,makeDuckModel,makeLoon,makePorcupine,BVM,ARW,setWeapon,shootArrow,BOWC,fish,makeAL60,PEOPLE,ducks,spawnDuck,killDuck,qualityGov,frameStats,Q,QUAL,applyQuality,setGraphics,SaveSys,persistSave,snapOpen,saveOpenNow,openResume,beasts,spawnBeast,beastHit,TERR,WX,WXT,wxSet,lightningStrike,get VM(){return VM},POIS,TX,VEG,S,pl,cam:GL.cam,GL,WORLD,CHS,KEY,newGame,runFrom,FL,IA,DLG,hat,get moose(){return moose},get birds(){return birds},get scene(){return scene},set scene(v){scene=v},MINI,say,startMini,spawnMoose,spawnBird,get ia(){return ia},ENVS,PSN,PSA,FADE,POST,CARD,facingWater,waterDepthAt,gh,step:stepSim,render:renderNow,press:k=>{hit[k]=true},down:c=>keysDown.add(c),up:c=>keysDown.delete(c),look};
   window.__ready=true;
 }
 onUnlock=()=>{if(scene==='play'&&!MINI.on&&!S.cut&&!pl.dead&&!S.paused){S.paused=true;S.pauseSel=0}};
