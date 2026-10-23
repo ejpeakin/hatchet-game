@@ -26,6 +26,7 @@ To play it on the web, turn on GitHub Pages for this repository (Settings → Pa
 | Use / interact | E or Enter | Use |
 | Swing hatchet / shoot bow | Click (hold to throw the hatchet or draw the bow) | Axe |
 | Dodge | Q or C | Dodge |
+| Swim stroke (in any water deep enough to swim) | Click | Stroke |
 | Swim down / up (in deep water) | Look down and swim, or hold C / Space | Dodge / Jump |
 | Switch hatchet / bow | 1, 2, X or mouse wheel | Swap |
 | Field notes | J or Tab | |
