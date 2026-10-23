@@ -12,7 +12,7 @@ To play it on the web, turn on GitHub Pages for this repository (Settings → Pa
 
 ### Modes
 
-- **Story:** the flight, the crash and the chapters of the book: water and food, shelter, fire, the bow, the moose, the storm, the wreck and the signal. The game saves at each chapter.
+- **Story:** the flight, the crash and the chapters of the book: water and food, shelter, fire, the bow, the moose, the storm, swimming down into the sunken plane for the med kit, and the signal. The game saves at each chapter.
 - **Open world:** no chapters and no limits. Explore landmarks, hunt, build a camp, ride out the weather and keep away from wolves and bears. Progress saves automatically, so you can continue later.
 
 ### Controls
@@ -26,6 +26,7 @@ To play it on the web, turn on GitHub Pages for this repository (Settings → Pa
 | Use / interact | E or Enter | Use |
 | Swing hatchet / shoot bow | Click (hold to throw the hatchet or draw the bow) | Axe |
 | Dodge | Q or C | Dodge |
+| Swim down / up (in deep water) | Look down and swim, or hold C / Space | Dodge / Jump |
 | Switch hatchet / bow | 1, 2, X or mouse wheel | Swap |
 | Field notes | J or Tab | |
 | Pause | Esc or P | Pause button |

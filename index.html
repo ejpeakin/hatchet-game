@@ -3756,7 +3756,7 @@ const Snd={c:null,m:null,on:true,nb:null,amb:{},
     if(this.c){if(this.c.state==='suspended')this.c.resume();return}
     try{
       const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;
-      const c=this.c=new AC(),m=this.m=c.createGain();m.gain.value=this.on?.7:0;m.connect(c.destination);
+      const c=this.c=new AC(),m=this.m=c.createGain();m.gain.value=this.on?.7:0;const lp=this.lp=c.createBiquadFilter();lp.type='lowpass';lp.frequency.value=22000;m.connect(lp);lp.connect(c.destination);
       const len=c.sampleRate*2,b=c.createBuffer(1,len,c.sampleRate),d=b.getChannelData(0);for(let i=0;i<len;i++)d[i]=Math.random()*2-1;this.nb=b;
       const loop=(f,type,q)=>{const s=c.createBufferSource();s.buffer=b;s.loop=true;const fl=c.createBiquadFilter();fl.type=type;fl.frequency.value=f;fl.Q.value=q;const g=c.createGain();g.gain.value=0;s.connect(fl);fl.connect(g);g.connect(m);s.start();return{g,fl}};
       this.amb.wind=loop(480,'bandpass',.5);this.amb.water=loop(620,'lowpass',.4);this.amb.rain=loop(3400,'highpass',.3);this.amb.fire=loop(1800,'bandpass',.8);
@@ -4039,6 +4039,14 @@ function makeWaterMaterial(skyU,opts={}){
     void main(){
       if(vDepth<0.)discard;
       vec3 V=normalize(cameraPosition-vW);vec3 n=wnorm(vW.xz);
+      if(cameraPosition.y<vW.y-.01){   // seen from under the surface: a bright, rippling window overhead, the dark water mirrored beyond it
+        vec3 U=-V;vec2 wob=n.xz*2.2;float up=clamp(U.y+wob.x*.15,0.,1.),win=smoothstep(.6,.74,up);
+        vec3 sky=skyCol(normalize(vec3(U.x*.55+wob.x,1.,U.z*.55+wob.y)),uClouds>.5)*1.15;
+        float glint=pow(max(dot(normalize(vec3(U.x+wob.x*.6,U.y,U.z+wob.y*.6)),sunDir),0.),24.)*1.6;
+        float sh=.75+.5*vn(vW.xz*1.7+uTime*.4)+.35*pow(vn(vW.xz*4.3-uTime*.7),3.);
+        vec3 c=mix(fogColor*(1.3+.6*sh),sky*sh+sunCol*glint,win);
+        float dist=length(vW-cameraPosition);c=mix(c,fogColor,1.-exp(-fogDensity*fogDensity*dist*dist*16.));
+        gl_FragColor=linearToOutputTexel(vec4(c,.97));return;}
       float fres=pow(1.-max(dot(n,V),0.),4.5)*.92+.035;
       vec3 R=reflect(-V,n);R.y=abs(R.y);
       vec3 refl=uReflOn>.5?vec3(0.):skyCol(R,uClouds>.5);
@@ -4215,11 +4223,13 @@ const PONDY=landBase(POND.x,POND.z)-.1;
 function streamY(z){return landBase(streamX(z),z)-.5}
 /* the bush plane comes in from the north-east along one straight line; a low pass in the ring of mountains lets it through */
 const FL_DIR=[.6998,.7144],FL_GO=[314,196];
+/* where the storm leaves the plane: nose-down in a hollow of the lake bed, tail out of the water */
+const SUNK={x:38,z:-47,yaw:Math.PI/2+.5,pitch:-.42,y:-3.35};SUNK.nx=SUNK.x+Math.cos(SUNK.yaw)*2.4;SUNK.nz=SUNK.z-Math.sin(SUNK.yaw)*2.4;
 function flPass(x,z){const dx=x-LAKE.cx,dz=z-LAKE.cz,along=dx*FL_DIR[0]+dz*FL_DIR[1],off=dx*FL_DIR[1]-dz*FL_DIR[0];return Math.exp(-(off/46)*(off/46))*sstep(400,470,along)}
 function rawH(x,z){
   let h=landBase(x,z);
   const dx=(x-LAKE.cx)/LAKE.rx,dz=(z-LAKE.cz)/LAKE.rz,t=Math.hypot(dx,dz);
-  if(t<1)h=.18-6.5*Math.pow(1-t,.85);else if(t<1.3){const k=sstep(1,1.3,t);h=lerp(.18,h,k)}
+  if(t<1)h=.18-6.5*Math.pow(1-t,.85)-2.3*gauss(x,z,SUNK.nx,SUNK.nz,7,7);else if(t<1.3){const k=sstep(1,1.3,t);h=lerp(.18,h,k)}
   h+=7*gauss(x,z,166,118,26,12)+20*gauss(x,z,303,92,36,52)+5*gauss(x,z,322,40,25,25);
   const cf=gauss(x,z,155,90,15,11);h=lerp(h,landBase(155,90)+.3,cf*.8); // camp flat
   const d=Math.abs(x-streamX(z)),sw=sstep(5,25,z)*(1-sstep(190,215,z));h-=1.25*Math.exp(-(d/2.5)*(d/2.5))*sw;
@@ -4476,13 +4486,14 @@ function makePlane(o={}){
   g.traverse(m=>{if(m.isMesh)m.castShadow=true});return g;
 }
 function buildPlanes(){
-  const w=makePlane();WORLD.wreck=w;GL.scene.add(w);
+  const w=makePlane();WORLD.wreck=w;GL.scene.add(w);buildWreckCabin();
   const fp=makePlane({floats:true});fp.visible=false;GL.scene.add(fp);WORLD.floatplane=fp;
 }
 function updateWreck(dt){
   const w=WORLD.wreck;if(!w)return;const bob=Math.sin(T*1.1)*.03;
   if(!S.planeUp){w.position.set(KEY.wreck[0],-1.3+bob,KEY.wreck[1]);w.rotation.set(0,.7,-1.3+Math.sin(T*.5)*.01,'YZX')} // tail up, nose below the surface
-  else{w.position.set(KEY.wreck[0]-6,-.72+bob,KEY.wreck[1]+8);w.rotation.set(Math.sin(T*.6)*.015,2.2,-.06,'YZX')}
+  else{w.position.set(SUNK.x,SUNK.y,SUNK.z);w.rotation.set(Math.sin(T*.37)*.004,SUNK.yaw,SUNK.pitch,'YZX')}
+  wreckCabUpdate();
   w.userData.prop.rotation.x=0;
   const f=WORLD.floatplane;f.visible=!!S.fl.floatplane;if(f.visible){const fp=S.fl.floatplane;f.position.set(fp.x,1.14+Math.sin(T*1.2)*.03,fp.z);f.rotation.set(0,fp.ry,Math.sin(T*.9)*.01,'YZX');f.userData.prop.rotation.x=T*30}
 }
@@ -5612,7 +5623,7 @@ const EYE=1.48,GRAV=14;let ia=null;
 const fwdV=(yaw=pl.yaw)=>V3(-Math.sin(yaw),0,-Math.cos(yaw)),rightV=(yaw=pl.yaw)=>V3(Math.cos(yaw),0,-Math.sin(yaw));
 const yawTo=(x,z)=>Math.atan2(-(x-pl.x),-(z-pl.z));
 function lookDir(){const cy=Math.cos(pl.pitch);return V3(-Math.sin(pl.yaw)*cy,Math.sin(pl.pitch),-Math.cos(pl.yaw)*cy)}
-function placePlayer(x,z,yaw=0){pl.swim=false;pl.x=x;pl.z=z;pl.y=gh(x,z);pl.vx=pl.vz=pl.vy=0;pl.yaw=yaw;pl.pitch=0;pl.on=true;pl.roll=0;pl.kneel=0;pl.lock=0;pl.pose='';pl.charge=0;pl.sick=0;pl.dead=false;pl.inv=0;pl.sit=0;pl.quills=0;pl.hasH=true;S.camLock=null;cp.x=x;cp.y=pl.y+EYE;cp.z=z;cp.yaw=yaw;cp.pitch=0}
+function placePlayer(x,z,yaw=0){pl.swim=false;pl.dive=false;DIVE.held=false;DIVE.strap=0;DIVE.cab=false;S.breath=1;pl.x=x;pl.z=z;pl.y=gh(x,z);pl.vx=pl.vz=pl.vy=0;pl.yaw=yaw;pl.pitch=0;pl.on=true;pl.roll=0;pl.kneel=0;pl.lock=0;pl.pose='';pl.charge=0;pl.sick=0;pl.dead=false;pl.inv=0;pl.sit=0;pl.quills=0;pl.hasH=true;S.camLock=null;cp.x=x;cp.y=pl.y+EYE;cp.z=z;cp.yaw=yaw;cp.pitch=0}
 const nearFire=(r=14)=>WORLD.fires.some(f=>f.lit&&Math.hypot(pl.x-f.x,pl.z-f.z)<r);
 function canAct(){return scene==='play'&&!DLG.cur&&!MINI.on&&pl.lock<=0&&!pl.dead&&!S.cut}
 function anim(pose,sec,kneel=0){pl.pose=pose;pl.poseT=0;pl.poseDur=sec;pl.lock=sec;pl.kneelTo=kneel}
@@ -5716,7 +5727,10 @@ function playerUpdate(dt){
   let fw=0,st=0;if(free||S.moveOK){fw=(isDown('fwd')?1:0)-(isDown('back')?1:0)+joy.y;st=(isDown('right')?1:0)-(isDown('left')?1:0)+joy.x}
   let l=Math.hypot(fw,st);if(l>1){fw/=l;st/=l;l=1}
   const f=fwdV(),r=rightV();let wx=f.x*fw+r.x*st,wz=f.z*fw+r.z*st;
-  const wd=waterDepthAt(pl.x,pl.z);pl.wade=clamp((wd-.1)/.6,0,1);if(S.open){if(wd>1.05)pl.swim=true;else if(wd<.8)pl.swim=false}else pl.swim=false;
+  const wd=waterDepthAt(pl.x,pl.z);pl.wade=clamp((wd-.1)/.6,0,1);if(canSwim()){if(wd>1.05)pl.swim=true;else if(wd<.8)pl.swim=false}else pl.swim=false;
+  if(!pl.dive)S.breath=Math.min(1,(S.breath??1)+dt/3);
+  if(!pl.dive&&pl.swim&&free&&(hit.dodge||isDown('dodge')||(pl.pitch<-.55&&fw>.3)))diveStart();
+  if(pl.dive)diveMove(dt,free?fw:0,free?st:0);else{
   let spd=3.3*(isDown('run')&&!pl.drawing?1.65:1)*(pl.drawing?.55:1)*(pl.sick>0?.65:1)*(pl.swim?.72:1-.38*pl.wade);
   if(S.stormRun&&S.storm>.2){const wl=Math.max(0,-wx/(l||1));spd*=1-.5*S.storm*(l?wl:0)}
   if(pl.roll>0){pl.roll-=dt;pl.vx=pl.rdx*9.5;pl.vz=pl.rdz*9.5;if(pl.roll<=0){pl.roll=0;pl.rollCd=.45}}
@@ -5726,7 +5740,7 @@ function playerUpdate(dt){
   if(!pl.on)pl.vy-=GRAV*dt;
   // integrate with collisions
   const tryMove=(nx,nz)=>{
-    if(waterDepthAt(nx,nz)>.95&&!S.open)return false;
+    if(waterDepthAt(nx,nz)>.95&&!canSwim())return false;
     for(const c of colliders(nx,nz)){if(Math.hypot(c.x-nx,c.z-nz)<c.r+.38)return false}
     if(S.open){if(nx<WB.x0+14||nx>WB.x1-14||nz<WB.z0+14||nz>WB.z1-14)return false}else if(nx>S.limitR||nx<-34||nz>175||nz<-60)return false;
     if(pl.on&&!pl.swim){const g0=gh(pl.x,pl.z),g1=gh(nx,nz),dd=Math.hypot(nx-pl.x,nz-pl.z);if(dd>1e-4&&(g1-g0)/dd>1.5&&g1-g0>.03)return false}
@@ -5740,15 +5754,17 @@ function playerUpdate(dt){
   else if(pl.y<=g0){pl.y=g0;if(!pl.on){pl.on=true;pl.land=.5;Snd.step('soil');burst(pl.x,g0+.05,pl.z,4,1.2,.5,.2,[.6,.55,.42],false,-3)}pl.vy=0}else if(pl.on&&pl.y>g0+.12){pl.on=false}
   pl.sp=Math.hypot(pl.vx,pl.vz);pl.land=Math.max(0,pl.land-dt*3);
   if(pl.on&&pl.sp>.6&&!pl.roll){const pb=pl.bob;pl.bob+=dt*pl.sp*2.4;if(Math.floor(pb/Math.PI)!==Math.floor(pl.bob/Math.PI))stepSound()}else pl.bob+=dt*.3;
+  }
   if(pl.sick>0){pl.sick-=dt}
   // throw
   // a quick click swings the hatchet; holding the button winds up a throw that flies when released
-  if(S.weapon==='bow'&&S.fl.bow)bowInput(dt,free);
+  if(pl.dive){pl.hold=0;pl.charge=0}
+  else if(S.weapon==='bow'&&S.fl.bow)bowInput(dt,free);
   else if(free&&pl.hasH&&!pl.roll){if(hit.throw)pl.hold=.001;if(pl.hold>0){const dn=isDown('throw');if(dn){pl.hold+=dt;pl.charge=pl.hold>.24?Math.min(1,(pl.hold-.24)/.85):0}if(!dn){const h=pl.hold,c=pl.charge;pl.hold=0;pl.charge=0;if(h<.24)swingHatchet();else throwHatchet(Math.max(.12,c))}}}
   else if(!free&&(pl.charge>0||pl.hold>0)&&!hat.on){pl.charge=0;pl.hold=0}
   hatchetUpdate(dt);
   // interaction focus
-  ia=null;if(free){let best=1e9;const fwdH=V3(-Math.sin(pl.yaw),0,-Math.cos(pl.yaw));for(const o of IA){const lab=o.pr();if(!lab)continue;let d,tx,tz;if(o.test){if(!o.test())continue;d=0;tx=pl.x+fwdH.x*2;tz=pl.z+fwdH.z*2}else{tx=o.pos[0];tz=o.pos[1];d=Math.hypot(pl.x-tx,pl.z-tz);if(d>o.r)continue;const c=((tx-pl.x)*fwdH.x+(tz-pl.z)*fwdH.z)/(d||1);if(c<.35&&d>1.6)continue}
+  ia=null;if(free){let best=1e9;const fwdH=V3(-Math.sin(pl.yaw),0,-Math.cos(pl.yaw));for(const o of IA){if(pl.dive&&!o.dive)continue;const lab=o.pr();if(!lab)continue;let d,tx,tz;if(o.test){if(!o.test())continue;d=0;tx=pl.x+fwdH.x*2;tz=pl.z+fwdH.z*2}else{tx=o.pos[0];tz=o.pos[1];d=Math.hypot(pl.x-tx,pl.z-tz);if(d>o.r)continue;const c=((tx-pl.x)*fwdH.x+(tz-pl.z)*fwdH.z)/(d||1);if(c<.35&&d>1.6)continue}
       const sc=d+(o.test?1000:0)-(o.pri||0);if(sc<best){best=sc;ia={o,lab,tx,tz}}}}
   if(free&&ia&&(hit.act||hit.click&&!locked&&false)){if(ia.lab[0]==='!'){Snd.bad();toast(ia.lab.slice(1))}else ia.o.act()}
   // survival
@@ -5770,7 +5786,8 @@ function updateCamera(dt){
   const bobA=pl.on&&!pl.roll?Math.min(1,pl.sp/4):0,run=isDown('run')?1:0;
   if(lk){tx=lk.x;ty=lk.y;tz=lk.z;tyaw=lk.yaw;tp=lk.pitch}
   else{const eye=EYE-pl.kneel*.78-(pl.roll>0?.5*Math.sin(Math.min(1,(1-pl.roll/.38))*Math.PI):0)-pl.land*.08;
-    tx=pl.x;tz=pl.z;ty=pl.y+eye+Math.sin(pl.bob)*.028*bobA*(1+run*.5);tyaw=pl.yaw;tp=pl.pitch-pl.kneel*.35;tr=Math.cos(pl.bob)*.006*bobA+(pl.roll>0?pl.rdx*0:0)}
+    tx=pl.x;tz=pl.z;ty=pl.y+eye+Math.sin(pl.bob)*.028*bobA*(1+run*.5);tyaw=pl.yaw;tp=pl.pitch-pl.kneel*.35;tr=Math.cos(pl.bob)*.006*bobA+(pl.roll>0?pl.rdx*0:0);
+    if(pl.dive){ty=DIVE.hy+Math.sin(T*1.4)*.025;tr=Math.sin(T*.9)*.02}}
   if(lk){const k=1-Math.exp(-4*dt);cp.x=lerp(cp.x,tx,k);cp.y=lerp(cp.y,ty,k);cp.z=lerp(cp.z,tz,k);cp.yaw+=angDiff(cp.yaw,tyaw)*k;cp.pitch=lerp(cp.pitch,tp,k)}
   else{cp.x=tx;cp.y=ty;cp.z=tz;cp.yaw=tyaw;cp.pitch=tp}
   cp.roll=tr;camS.shake=Math.max(0,camS.shake-dt*1.6);const sh=camS.shake;
@@ -5780,7 +5797,7 @@ function updateCamera(dt){
 function titleCamera(dt){const c=GL.cam,a=T*.045+.6,cx=22,cz=-6;c.position.set(cx+Math.cos(a)*14,gh(cx+Math.cos(a)*14,cz+Math.sin(a)*14)+2.1,cz+Math.sin(a)*14);c.lookAt(KEY.wreck[0],3.5,KEY.wreck[1]);c.rotation.order='YXZ'}
 /* ---------- viewmodel animation ---------- */
 function updateViewmodel(dt){
-  if(!VM)return;const show=scene==='play'&&!S.camLock&&!MINI.on;GL.vmOn=show;if(!show)return;
+  if(!VM)return;const show=scene==='play'&&!S.camLock&&!MINI.on&&!pl.dive;GL.vmOn=show;if(!show)return;
   const R=VM.R,L=VM.L,bobA=pl.on&&!pl.roll?Math.min(1,pl.sp/4):0,bx=Math.sin(pl.bob*.5)*.012*bobA,by=Math.abs(Math.sin(pl.bob))*.02*bobA;
   let tp=V3(.28+bx,-.155+by+Math.sin(T*1.5)*.003,-.34),tr=V3(-.1,.22,.1),lp=V3(-.3-bx,-.38+by,-.3),lr=V3(-.12,-.2,-.08);
   const ch=pl.charge;
@@ -5851,7 +5868,7 @@ function beastHit(b,dmg,fromThrow){
   else{Snd.roar();b.woundT=6;if(b.hp<80||b.hits>=2){b.state='flee';b.flee=30;toast('The bear is hurt and lumbers away.',3)}else{b.state='charge';b.t=0;b.hitThis=false}}
 }
 function wolfBite(b){
-  if(pl.inv>0||pl.dead||pl.swim)return false;const o=BST.wolf;hurt(o.bite);pl.vx+=Math.sin(b.yaw)*1.6;pl.vz+=Math.cos(b.yaw)*1.6;b.bite=1;Snd.snarl();S.fl.bitten=(S.fl.bitten||0)+1;
+  if(pl.inv>0||pl.dead||pl.swim||pl.dive)return false;const o=BST.wolf;hurt(o.bite);pl.vx+=Math.sin(b.yaw)*1.6;pl.vz+=Math.cos(b.yaw)*1.6;b.bite=1;Snd.snarl();S.fl.bitten=(S.fl.bitten||0)+1;
   if(!S.fl.biteToast){S.fl.biteToast=1;toast('Fight back (E to swing), or get to a fire or into the water!',4.5)}return true}
 /* ---- brains ---- */
 function steer(b,tx,tz,spd,dt,turn=5){
@@ -6653,6 +6670,127 @@ function arrowsUpdate(dt){
     }
   }
 }
+/* ================= DIVING: swim down into the sunken plane for the med kit =================
+   After the storm the plane lies nose-down in a hollow of the lake bed with its tail out of the water. The door on
+   Brian's side is gone, so the cabin can be entered underwater. Look down and swim (or hold C / DIVE) to go under,
+   SPACE / JUMP to rise. One breath lasts about half a minute. */
+const DIVE={hy:0,vx:0,vy:0,vz:0,cab:false,held:false,strap:0,bub:0,silt:0,u:0,inv:new THREE.Matrix4(),M:new THREE.Matrix4(),warn:0};
+const canSwim=()=>S.open||!!S.swimOK;
+/* ---- the wreck's cabin: a doorway cut in the skin, an inner lining, seats, panel and the med kit ---- */
+function buildWreckCabin(){
+  const w=WORLD.wreck,cab=w.userData.fus,skins=cab.children.filter(m=>m.isMesh&&m.geometry.index&&m.geometry.attributes.uv);
+  const lin=new THREE.MeshStandardMaterial({color:new THREE.Color(0x6f6a58).convertSRGBToLinear(),emissive:new THREE.Color(0x1a1c16),roughness:.95,side:THREE.BackSide});
+  for(const m of skins){const g=m.geometry,pa=g.attributes.position,I=g.index.array,keep=[];
+    for(let t=0;t<I.length;t+=3){let cx=0,cy=0,cz=0;for(let k=0;k<3;k++){cx+=pa.getX(I[t+k]);cy+=pa.getY(I[t+k]);cz+=pa.getZ(I[t+k])}cx/=3;cy/=3;cz/=3;
+      if(cz>.3&&cx>.6&&cx<1.32&&cy>-.06&&cy<1.5)continue;keep.push(I[t],I[t+1],I[t+2])}
+    const ng=g.clone();ng.setIndex(keep);m.geometry=ng;const inner=new THREE.Mesh(ng,lin);cab.add(inner)}
+  w.userData.glass.forEach(m=>{if(m.position.z>0&&m.geometry.type==='ShapeGeometry'){const p=m.geometry.attributes.position;let x=0;for(let i=0;i<p.count;i++)x+=p.getX(i);if(x/p.count>.4)m.visible=false}});   // the door window went with the door
+  // the right wing broke off a little way out in the crash, so the doorway beneath it is open to the water
+  for(const c of w.children.slice()){
+    if(c.isGroup&&Math.abs(c.position.y-1.665)<.01&&c.rotation.x<0){c.scale.z=.2;c.children.forEach(m=>{if(m.material&&m.material.color&&m.material.color.r>m.material.color.g*1.6||m.geometry&&m.geometry.type==='SphereGeometry')m.visible=false})}
+    if(c.isMesh&&c.position.z>.5&&(c.geometry.type==='CylinderGeometry'&&c.position.y>.5||c.geometry.type==='SphereGeometry'&&c.position.y>1))c.visible=false}
+  const G=new THREE.Group();w.add(G);
+  const mt=(c,r=.9,e=.18)=>{const col=new THREE.Color(c).convertSRGBToLinear();return new THREE.MeshStandardMaterial({color:col,emissive:col.clone().multiplyScalar(e),roughness:r})};
+  const box=(sx,sy,sz,m,x,y,z,rx=0,ry=0,rz=0)=>{const b=new THREE.Mesh(new THREE.BoxGeometry(sx,sy,sz),m);b.position.set(x,y,z);b.rotation.set(rx,ry,rz);G.add(b);return b};
+  const floor=mt(0x3c3f3a),fab=mt(0x5e5a4c),dark=mt(0x1d1f20,.8,.12),metal=new THREE.MeshStandardMaterial({color:0x8a9094,metalness:.7,roughness:.45,emissive:0x101214});
+  box(3.0,.04,1.5,floor,-.2,.0,0);box(.05,1.55,1.5,lin.clone(),-1.65,.75,0).material.side=THREE.FrontSide;   // floor and the bulkhead behind the baggage space
+  box(.05,1.0,1.5,dark,1.42,.45,0);box(.4,.08,1.48,dark,1.18,.98,0);box(.05,.42,1.44,dark,1.0,.74,0,0,0,.18);   // firewall, glare shield, panel
+  for(let i=0;i<5;i++){const d=new THREE.Mesh(new THREE.CircleGeometry(.07,16),mt(0x0c0d0e,.4,.05));d.position.set(.97,.78,-.5+i*.25);d.rotation.y=-Math.PI/2;d.rotateX(-.18);G.add(d)}
+  const seat=(x,z,tilt)=>{const s=new THREE.Group();s.position.set(x,0,z);const b=new THREE.Mesh(new THREE.BoxGeometry(.5,.12,.46),fab);b.position.set(.04,.36,0);const k=new THREE.Mesh(new THREE.BoxGeometry(.1,.66,.46),fab);k.position.set(-.26,.72,0);k.rotation.z=tilt;s.add(b,k);
+    const leg=new THREE.Mesh(new THREE.BoxGeometry(.4,.3,.04),metal);leg.position.set(.02,.16,0);s.add(leg);G.add(s);return s};
+  seat(.12,.4,.1);seat(.12,-.4,.5);                                        // Brian's seat upright; the pilot's knocked back in the crash
+  const bench=new THREE.Group();bench.position.set(-.95,0,0);{const b=new THREE.Mesh(new THREE.BoxGeometry(.5,.12,1.3),fab);b.position.set(.04,.36,0);const k=new THREE.Mesh(new THREE.BoxGeometry(.1,.6,1.3),fab);k.position.set(-.25,.7,0);k.rotation.z=.12;bench.add(b,k)}G.add(bench);
+  for(const z of[.42,-.42]){const y=new THREE.Group();y.position.set(.92,.72,z);const c=new THREE.Mesh(new THREE.CylinderGeometry(.02,.02,.4,8),metal);c.rotation.z=Math.PI/2;c.position.x=-.18;const r=new THREE.Mesh(new THREE.TorusGeometry(.12,.014,8,18),dark);r.rotation.y=Math.PI/2;r.position.x=-.38;y.add(c,r);G.add(y)}
+  // loose things the crash threw about
+  box(.3,.2,.22,mt(0x4a3a2a),-1.35,.11,-.4,0,.6,0);box(.42,.06,.3,mt(0x6b6b5e),-.4,.04,.15,0,-.4,.05);
+  const weed=mt(0x2f4a22,1,.25);for(let i=0;i<14;i++){const h=.15+Math.random()*.35,s=new THREE.Mesh(new THREE.ConeGeometry(.03,h,4),weed);s.position.set(-1.5+Math.random()*2.6,.02+h/2,(Math.random()-.5)*1.3);s.rotation.set((Math.random()-.5)*.6,0,(Math.random()-.5)*.6);G.add(s)}
+  // the med kit: a red case with a white cross, belted to the back bench
+  const kit=new THREE.Group();kit.position.set(-.86,.58,.22);
+  const red=new THREE.MeshStandardMaterial({color:new THREE.Color(0xc0281e).convertSRGBToLinear(),emissive:new THREE.Color(0x5a0c08),roughness:.45}),wht=new THREE.MeshStandardMaterial({color:0xf2f0ea,emissive:0x383836,roughness:.5});
+  const body=new THREE.Mesh(new THREE.BoxGeometry(.24,.3,.44),red);kit.add(body);
+  for(const s of[1,-1]){const v=new THREE.Mesh(new THREE.BoxGeometry(.006,.17,.05),wht),h=new THREE.Mesh(new THREE.BoxGeometry(.006,.05,.17),wht);v.position.x=h.position.x=s*.123;kit.add(v,h)}
+  const handle=new THREE.Mesh(new THREE.TorusGeometry(.06,.012,6,12,Math.PI),new THREE.MeshStandardMaterial({color:0x222222,roughness:.6}));handle.position.y=.15;handle.rotation.y=Math.PI/2;kit.add(handle);
+  const strap=new THREE.Mesh(new THREE.BoxGeometry(.27,.33,.05),new THREE.MeshStandardMaterial({color:0x2d3320,emissive:0x080a06,roughness:.9}));strap.position.z=.08;kit.add(strap);
+  G.add(kit);G.traverse(o=>{if(o.isMesh){o.castShadow=false;o.receiveShadow=true}});
+  WORLD.wreckCab={G,kit,strap,body};
+}
+/* ---- swimming under water ---- */
+function diveStart(){
+  const wd=waterDepthAt(pl.x,pl.z),surf=gh(pl.x,pl.z)+wd;if(wd<1.7)return false;
+  pl.dive=true;pl.swim=false;DIVE.hy=surf-.3;DIVE.vx=pl.vx*.6;DIVE.vz=pl.vz*.6;DIVE.vy=-1.4;DIVE.cab=false;DIVE.bub=1.5;Snd.splash();
+  burst(pl.x,surf+.02,pl.z,10,1.6,.6,.08,[.85,.93,.97],false,-6,1.2);
+  if(!S.fl.diveTip){S.fl.diveTip=1;toast(TOUCH?'Swim where you look. JUMP to rise, DODGE to go deeper. Watch your air.':'Swim where you look. SPACE to rise, C to go deeper. Watch your air.',5)}
+  return true;
+}
+function diveSurface(surf){
+  pl.dive=false;pl.swim=true;pl.y=surf-.95;pl.vy=0;pl.on=true;DIVE.cab=false;Snd.splash();Snd.tone(320,.25,'sine',.05,180);
+  burst(pl.x,surf+.02,pl.z,8,1.4,.6,.08,[.85,.93,.97],false,-6,1.2);
+  if(S.breath<.35)toast('Air! Brian gulps it down, gasping.',2.2);
+  if(DIVE.held){DIVE.held=false;S.inv.pack=1;S.inv.elt=1;S.inv.medkit=1;Snd.good();toast('You bring the med kit up. Swim back to shore with it.',4)}
+}
+function diveMove(dt,fw,st){
+  const cy=Math.cos(pl.pitch),f=V3(-Math.sin(pl.yaw)*cy,Math.sin(pl.pitch),-Math.cos(pl.yaw)*cy),r=rightV(),up=(isDown('jump')?1:0)-(isDown('dodge')?1:0);
+  const spd=(isDown('run')?2.7:1.8)*(DIVE.held?.8:1)*(S.breath<=0?.6:1);
+  const wx=f.x*fw+r.x*st,wy=f.y*fw+up,wz=f.z*fw+r.z*st,k=1-Math.exp(-2.6*dt);
+  DIVE.vx=lerp(DIVE.vx,wx*spd,k);DIVE.vz=lerp(DIVE.vz,wz*spd,k);DIVE.vy=lerp(DIVE.vy,wy*spd+(Math.abs(wy)<.05?.3:0),k);   // lungs full of air: a slow drift up when not kicking
+  let x=pl.x+DIVE.vx*dt,z=pl.z+DIVE.vz*dt,y=DIVE.hy+DIVE.vy*dt;
+  if(S.open){x=clamp(x,WB.x0+14,WB.x1-14);z=clamp(z,WB.z0+14,WB.z1-14)}
+  const p=wreckCollide(V3(x,y,z));x=p.x;y=p.y;z=p.z;
+  const g=gh(x,z);if(y<g+.32){y=g+.32;DIVE.vy=Math.max(0,DIVE.vy)}
+  const wd=waterDepthAt(x,z),surf=g+wd;
+  pl.x=x;pl.z=z;DIVE.hy=y;pl.y=y-EYE;pl.vx=DIVE.vx;pl.vz=DIVE.vz;pl.sp=Math.hypot(DIVE.vx,DIVE.vz);pl.on=true;pl.wade=1;
+  if(y>surf-.12||wd<1.0){if(wd<1.05){pl.dive=false;pl.swim=false;pl.y=g;if(DIVE.held)diveSurface(surf);return}diveSurface(surf);return}
+  // air
+  S.breath=Math.max(0,S.breath-dt/(isDown('run')?24:32));
+  if(S.breath<=0){hurt(9*dt,true);DIVE.warn-=dt;if(DIVE.warn<=0){DIVE.warn=1.2;pl.hurtFlash=1;Snd.hurt();camS.shake=.3}}
+  else if(S.breath<.3){DIVE.warn-=dt;if(DIVE.warn<=0){DIVE.warn=2.4;toast('Your lungs are burning. Get to the surface!',2)}}
+  // bubbles from the mouth, a trail when kicking hard, silt hanging in the water
+  const hx=pl.x+f.x*.25,hz=pl.z+f.z*.25;DIVE.bub-=dt;
+  if(DIVE.bub<=0){DIVE.bub=S.breath<.3?.7:1.6+Math.random()*1.4;for(let i=0;i<5+(S.breath<.3?6:0);i++)PSN.spawn(hx+rnd(-.05,.05),y-.12,hz+rnd(-.05,.05),rnd(-.1,.1),rnd(.6,1.1),rnd(-.1,.1),rnd(1.2,2.2),rnd(.012,.03),[.85,.93,.97],2.2,0,.75);Snd.tone(900+Math.random()*500,.05,'sine',.02,1500)}
+  if(pl.sp>1.4&&Math.random()<dt*10)PSN.spawn(pl.x-f.x*.4+rnd(-.2,.2),y-.4,pl.z-f.z*.4+rnd(-.2,.2),rnd(-.1,.1),rnd(.3,.7),rnd(-.1,.1),rnd(1,1.8),rnd(.01,.02),[.85,.93,.97],1.8,0,.6);
+  DIVE.silt-=dt;if(DIVE.silt<=0){DIVE.silt=.05;PSN.spawn(pl.x+rnd(-3,3),y+rnd(-1.5,1.5),pl.z+rnd(-3,3),rnd(-.05,.05),rnd(-.03,.03),rnd(-.05,.05),rnd(3,5),rnd(.006,.014),[.5,.55,.42],0,0,.55)}
+}
+/* collision with the sunken plane, worked out in the plane's own frame: you can only get into the cabin through the doorway */
+const WRK_BOX=[[1.45,3.55,-.2,1.0,-.68,.68],[-4.9,-2.0,.25,1.42,-.45,.45],[-.53,1.13,1.6,1.84,-6,1.25],[-4.97,-2.9,1.06,2.66,-.07,.07],[-4.92,-3.74,.98,1.08,-2.2,2.2]];
+function wreckCollide(P){
+  const w=WORLD.wreck;if(!w||!S.planeUp)return P;w.updateMatrixWorld();DIVE.M.copy(w.matrixWorld);DIVE.inv.copy(DIVE.M).invert();
+  const p=P.clone().applyMatrix4(DIVE.inv),r=.28;
+  const door=q=>q.x>.66&&q.x<1.18&&q.y>.14&&q.y<1.3;
+  if(DIVE.cab){p.x=clamp(p.x,-1.62+r,p.z>.3&&p.y>.14&&p.y<1.3?1.1:.95-r);p.y=clamp(p.y,.02+r,1.56-r);p.z=Math.max(p.z,-.74+r);if(!door(p))p.z=Math.min(p.z,.74-r);if(p.z>.86)DIVE.cab=false}
+  else{
+    const x0=-2.0-r,x1=1.45+r,y0=-.25-r,y1=1.62+r,z0=-.82-r,z1=.82+r;
+    if(p.x>x0&&p.x<x1&&p.y>y0&&p.y<y1&&p.z>z0&&p.z<z1){
+      if(door(p)&&p.z>.2){if(p.z<.74)DIVE.cab=true}
+      else{const pen=[[p.x-x0,0,-1],[x1-p.x,0,1],[p.y-y0,1,-1],[y1-p.y,1,1],[p.z-z0,2,-1],[z1-p.z,2,1]].sort((a,b)=>a[0]-b[0])[0];if(pen[1]===0)p.x=pen[2]<0?x0:x1;else if(pen[1]===1)p.y=pen[2]<0?y0:y1;else p.z=pen[2]<0?z0:z1}}
+    for(const [a0,a1,b0,b1,c0,c1] of WRK_BOX){const cx=clamp(p.x,a0,a1),cy=clamp(p.y,b0,b1),cz=clamp(p.z,c0,c1),dx=p.x-cx,dy=p.y-cy,dz=p.z-cz,d=Math.hypot(dx,dy,dz);
+      if(d<r){if(d>1e-4){const k=r/d;p.x=cx+dx*k;p.y=cy+dy*k;p.z=cz+dz*k}else p.y=b1+r}}
+  }
+  return p.applyMatrix4(DIVE.M);
+}
+/* the med kit: close enough, looking at it, then tug the strap loose */
+function kitWorld(){const K=WORLD.wreckCab;if(!K)return null;K.kit.updateMatrixWorld();return new THREE.Vector3().setFromMatrixPosition(K.kit.matrixWorld)}
+function diveIAs(){
+addIA({test:()=>{if(!pl.dive||DIVE.held||S.inv.pack||!WORLD.wreckCab||!S.planeUp)return false;const k=kitWorld(),c=GL.cam.position,d=k.distanceTo(c);if(d>1.25)return false;const f=new THREE.Vector3(0,0,-1).applyQuaternion(GL.cam.quaternion);return f.dot(k.clone().sub(c).normalize())>.55},
+  dive:true,pr:()=>'Tug the med kit free',pri:5,act:()=>{DIVE.strap+=.22;camS.shake=.15;Snd.tone(140,.08,'triangle',.06,90);const k=kitWorld();for(let i=0;i<4;i++)PSN.spawn(k.x+rnd(-.1,.1),k.y,k.z+rnd(-.1,.1),rnd(-.2,.2),rnd(.4,.8),rnd(-.2,.2),1.4,.02,[.85,.93,.97],2,0,.7);
+    if(DIVE.strap>=1){DIVE.held=true;DIVE.strap=0;Snd.pick();toast('The strap gives! You have the med kit. Now get out and up for air.',3.5)}else if(DIVE.strap<.25)toast('The case is belted to the seat. Keep tugging!',1.6)}});
+  /* using it once you have it */
+addIA({test:()=>!!S.inv.medkit&&S.hp<70&&!pl.dive&&canAct(),pr:()=>'Use the med kit (+60 health)',pri:-50,act:()=>{S.inv.medkit=0;S.hp=Math.min(100,S.hp+60);Snd.good();pl.hurtFlash=0;toast('Bandages, antiseptic and a few painkillers. Brian feels steadier.',3)}});
+}
+function wreckCabUpdate(){const K=WORLD.wreckCab;if(!K)return;K.kit.visible=!S.inv.pack&&!DIVE.held;K.strap.scale.y=1-Math.min(.6,DIVE.strap*.6);K.kit.rotation.x=DIVE.strap>0?Math.sin(T*30)*.03*DIVE.strap:0}
+/* how the world looks and sounds from under the surface */
+const UW_FOG=new THREE.Color(.012,.046,.044);
+function diveEnv(){
+  const c=GL.cam.position,wd=waterDepthAt(c.x,c.z),surf=gh(c.x,c.z)+wd,under=scene==='play'&&wd>0&&c.y<surf-.03;
+  DIVE.u=under?1:0;
+  if(Snd.lp&&Snd.c){const want=under?520:22000;if(Snd.lpw!==want){Snd.lpw=want;Snd.lp.frequency.setTargetAtTime(want,Snd.c.currentTime,.08)}}
+  if(WORLD.sky)WORLD.sky.visible=!under;if(WORLD.ridge)WORLD.ridge.visible=!under;   // under water the murk, not the sky, fills the view
+  if(!under)return;
+  const deep=clamp((surf-c.y)/5,0,1),day=SKYE.dayK*.8+.2;
+  GL.scene.fog.color.copy(UW_FOG).multiplyScalar(day*(1-.5*deep));GL.scene.fog.density=.085+.05*deep;ENVS.fog.copy(GL.scene.fog.color);
+  for(const w of WORLD.waterMats){w.uniforms.fogColor.value.copy(GL.scene.fog.color);w.uniforms.fogDensity.value=GL.scene.fog.density*.25}
+  PE.tint.setRGB(.62,.98,.92);PE.sat=.78;PE.ex*=.86-.2*deep;PE.vig=.75;
+  Snd.set('wind',0);Snd.set('water',.28);Snd.set('cricket',0);Snd.set('rain',0);
+}
 /* ================= PEOPLE: the Ready Player Me avatar from the three.js examples ================= */
 const PEOPLE={ready:false,failed:false};
 const AX={x:new THREE.Vector3(1,0,0),y:new THREE.Vector3(0,1,0),z:new THREE.Vector3(0,0,1)};
@@ -7171,7 +7309,7 @@ function saveOpenNow(){if(!canSaveNow())return false;return persistSave('open',s
 function applyWeatherNow(type){const o=WXT[type];WX.type=type;WX.label=o.label;Object.assign(WX,{dark:o.dark,rain:o.rain,wind:o.wind,fog:o.fog,hail:o.hail})}
 async function openResume(sv){
   resetSeq();S.open=true;S.ch=10;S.retry=false;scene='play';S.cut=false;S.qte=null;S.camLock=null;S.chTitle='SURVIVAL LOG';S.limitR=1e9;S.limitMsg='';S.paused=false;
-  const s=sv.S;Object.assign(S,{day:s.day,tod:s.tod,hp:Math.max(40,s.hp),hunger:Math.max(30,s.hunger),thirst:Math.max(30,s.thirst),inv:clone(s.inv),fl:clone(s.fl)||{},fire:!!s.fire,shelter:!!s.shelter,eltOn:!!s.eltOn,planeUp:!!s.planeUp,stats:clone(s.stats)||{birds:0,fish:0},disc:clone(s.disc)||{},discN:s.discN||0,mooseT:s.mooseT||rnd(260,420)});
+  const s=sv.S;Object.assign(S,{day:s.day,tod:s.tod,hp:Math.max(40,s.hp),hunger:Math.max(30,s.hunger),thirst:Math.max(30,s.thirst),inv:clone(s.inv),fl:clone(s.fl)||{},fire:!!s.fire,shelter:!!s.shelter,eltOn:!!s.eltOn,planeUp:true,stats:clone(s.stats)||{birds:0,fish:0},disc:clone(s.disc)||{},discN:s.discN||0,mooseT:s.mooseT||rnd(260,420)});
   S.todTo=null;S.dayRate=.02;S.clock=true;S.engine=0;S.storm=0;S.stormTarget=0;S.tornado=-1;S.stormRun=false;S.mosq=false;S.birdT=0;S.saveT=25;S.threat=0;S.threatList=[];
   [...WORLD.stumps,...WORLD.snags].forEach((q,i)=>{q.cut=(sv.cuts&&sv.cuts[i])||0});
   wxReset();const wt=sv.wx&&WXT[sv.wx.type]?sv.wx.type:'clear';applyWeatherNow(wt);WX.t=Math.max(40,(sv.wx&&sv.wx.t)||rnd(120,240));WX.wet=(sv.wx&&sv.wx.wet)||0;WX.aurDay=(sv.wx&&sv.wx.aurDay)??-1;WETU.value=WX.wet;
@@ -7249,7 +7387,7 @@ function drawFps(g){
   g.save();g.font=`600 13px ${FU}`;g.textAlign='right';const w=g.measureText(t).width+14;g.fillStyle='rgba(6,8,6,.55)';rr(g,W-w-6,3,w,19,6);g.fill();g.fillStyle=col;g.fillText(t,W-13,17);g.restore();
 }
 /* ================= GAME STATE ================= */
-const S={ch:-1,day:1,tod:10.3,todTo:null,todRate:.05,storm:0,stormTarget:0,flash:0,hp:100,hunger:85,thirst:85,inv:{branches:0,tinder:0,wood:0,meat:0,fish:0,signal:0,pack:0,elt:0,stave:0,shoots:0,arrows:0,feathers:0},weapon:'hatchet',fl:{},goals:[],limitR:100,limitMsg:'',clock:false,mosq:false,fire:false,shelter:false,eltOn:false,planeUp:false,tornado:-1,stats:{birds:0,fish:0},cut:false,qte:null,camLock:null,engine:0,hint:'',chTitle:'',retry:false,journal:false,markFn:null,stormRun:false,moveOK:false,sparkFlash:0,loc:'',locT:0,endT:0,briefDone:false,briefT:0,tornPos:{x:60,z:-130,s:1}};
+const S={ch:-1,day:1,tod:10.3,todTo:null,todRate:.05,storm:0,stormTarget:0,flash:0,hp:100,hunger:85,thirst:85,inv:{branches:0,tinder:0,wood:0,meat:0,fish:0,signal:0,pack:0,elt:0,stave:0,shoots:0,arrows:0,feathers:0,medkit:0},weapon:'hatchet',fl:{},goals:[],limitR:100,limitMsg:'',clock:false,mosq:false,fire:false,shelter:false,eltOn:false,planeUp:false,tornado:-1,stats:{birds:0,fish:0},cut:false,qte:null,camLock:null,engine:0,hint:'',chTitle:'',retry:false,journal:false,markFn:null,stormRun:false,moveOK:false,sparkFlash:0,loc:'',locT:0,endT:0,briefDone:false,briefT:0,tornPos:{x:60,z:-130,s:1}};
 Object.assign(S,{open:false,dayRate:.02,disc:{},menu:0,wx:{t:200,on:false},mooseT:300,birdT:0,discN:0});
 /* ================= INTERACTABLES ================= */
 const U=k=>TOUCH?'USE':k;
@@ -7272,7 +7410,7 @@ addIA({pos:KEY.pit,r:4,pr:()=>S.fire&&(S.inv.meat>0||S.inv.fish>0)?'Cook and eat
 addIA({test:()=>pl.z>18&&pl.z<205&&Math.abs(pl.x-streamX(pl.z))<5.5,r:0,pr:()=>chk(5,8)&&!S.cut?'Spear a fish':null,act:()=>{startMini('fish',ok=>{if(ok){S.inv.fish++;S.stats.fish++;toast('Caught a fish! Cook it at the fire.',4)}})}});
 addIA({pos:KEY.eggs,r:4.5,pr:()=>chk(6)&&!S.fl.eggs?'Dig for turtle eggs':null,act:()=>{anim('reach',2.8,1);Snd.noise(.4,900,.1);for(let i=0;i<9;i++)after(i*.3,()=>chips(KEY.eggs[0]+rnd(-.6,.6),gh(KEY.eggs[0],KEY.eggs[1])+.1,KEY.eggs[1]+rnd(-.6,.6),5,[.8,.72,.55]));
   if(!moose){spawnMoose(334,128);moose.tx=KEY.eggs[0]+16;moose.tz=KEY.eggs[1]-3}after(2.7,()=>{S.fl.eggs=1;S.hunger=Math.min(100,S.hunger+30);Snd.pick();toast('Turtle eggs! But something big is watching you...',4)})}});
-addIA({pos:KEY.dive,r:7,pr:()=>chk(8)&&!S.inv.pack&&!S.cut?'Dive to the wreck':null,act:()=>{S.cut=true;fade(1,.5).then(()=>{scene='dive';MINI.on=false;startMini('dive',ok=>{scene='play';if(ok){S.inv.pack=1;S.inv.elt=1}S.cut=false;FADE.a=1;FADE.to=0;FADE.sp=2});FADE.to=0;FADE.sp=2})}});
+diveIAs();
 addIA({pos:KEY.pit,r:5.5,pr:()=>chk(9)&&S.inv.elt&&!S.eltOn?'Switch on the transmitter':null,act:()=>{anim('reach',1.3,1);after(.9,()=>{S.eltOn=true;Snd.good();Snd.tone(1200,.1,'square',.1,0,.15);Snd.tone(1200,.1,'square',.1,0,.4)})}});
 KEY.snag.forEach((p,i)=>addIA({pos:p,r:3.2,pr:()=>{const st=WORLD.snags[i];return chk(9)&&S.eltOn&&st&&st.cut<3?'Chop dry wood':null},act:()=>{const st=WORLD.snags[i];chopAct(st,()=>{S.inv.signal++;toast(`Signal wood: ${S.inv.signal}/3`)})}}));
 addIA({pos:KEY.signal,r:5,pr:()=>chk(9)&&S.eltOn&&!S.fl.signalLit?(S.inv.signal>=3?'Light the signal fire':'!Chop 3 dry snags on the hill first'):null,act:()=>{startMini('fire',ok=>{if(ok){S.fl.signalLit=1;Snd.good()}},{need:2})}});
@@ -7347,9 +7485,15 @@ function drawHUD(g){
     g.font=`500 19px ${FU}`;gl.forEach((o,i)=>{const done=o.d(),yy=y+58+i*28;g.strokeStyle=done?'#8aa860':'rgba(236,230,210,.5)';g.lineWidth=2;g.beginPath();g.arc(x+26,yy-6,7,0,TAU);g.stroke();if(done){g.fillStyle='#8aa860';g.beginPath();g.arc(x+26,yy-6,4,0,TAU);g.fill()}
       g.fillStyle=done?'rgba(236,230,210,.45)':'#ece6d2';const t=typeof o.t==='function'?o.t():o.t;g.fillText(t,x+44,yy,w-60)})}
   // inventory
-  const items=[['HATCHET',pl.hasH?1:0,'#cfd5d8'],['BOW',S.fl.bow?1:0,'#d8bd8e'],['ASH STAVE',S.inv.stave|0,'#c9b48a'],['WILLOW SHOOTS',S.inv.shoots|0,'#9aa860'],['FEATHERS',S.fl.fletched?0:S.inv.feathers|0,'#b8b2a4'],['BRANCHES',S.inv.branches,'#8a6a42'],['BIRCH BARK',S.inv.tinder,'#e8e2cc'],['DRY LOGS',S.inv.wood,'#b08850'],['RAW BIRD',S.inv.meat,'#c88a6a'],['FISH',S.inv.fish,'#8ab0c0'],['SIGNAL WOOD',S.inv.signal,'#b08850'],['SURVIVAL PACK',S.inv.pack,'#c6561f'],['TRANSMITTER',S.inv.elt,S.eltOn&&Math.sin(T*5)>0?'#ff4030':'#e8863a']];
+  const items=[['HATCHET',pl.hasH?1:0,'#cfd5d8'],['BOW',S.fl.bow?1:0,'#d8bd8e'],['ASH STAVE',S.inv.stave|0,'#c9b48a'],['WILLOW SHOOTS',S.inv.shoots|0,'#9aa860'],['FEATHERS',S.fl.fletched?0:S.inv.feathers|0,'#b8b2a4'],['BRANCHES',S.inv.branches,'#8a6a42'],['BIRCH BARK',S.inv.tinder,'#e8e2cc'],['DRY LOGS',S.inv.wood,'#b08850'],['RAW BIRD',S.inv.meat,'#c88a6a'],['FISH',S.inv.fish,'#8ab0c0'],['SIGNAL WOOD',S.inv.signal,'#b08850'],['MED KIT',S.inv.medkit|0,'#e0453a'],['SURVIVAL PACK',S.inv.pack,'#c6561f'],['TRANSMITTER',S.inv.elt,S.eltOn&&Math.sin(T*5)>0?'#ff4030':'#e8863a']];
   let x=24;const y=H-46;g.font=`600 15px ${FU}`;
   for(const[n,c,col]of items){if(!c&&n!=='HATCHET')continue;const lab=n==='HATCHET'?(pl.hasH?n:n+' (thrown)'):n==='BOW'?`BOW · ${S.inv.arrows|0} ARROW${(S.inv.arrows|0)===1?'':'S'}`:(c>1?`${n} ×${c}`:n),w=g.measureText(lab).width+34;g.fillStyle='rgba(8,10,8,.62)';rr(g,x,y,w,28,14);g.fill();if(S.fl.bow&&((n==='BOW')===((S.weapon||'hatchet')==='bow'))&&(n==='BOW'||n==='HATCHET')){g.strokeStyle='#e8863a';g.lineWidth=2;g.stroke()}g.fillStyle=col;g.beginPath();g.arc(x+15,y+14,5,0,TAU);g.fill();g.fillStyle='#ece6d2';g.fillText(lab,x+26,y+19);x+=w+8}
+  // air while under water
+  if(pl.dive||(S.breath??1)<.995){const b=S.breath??1,n=10,bw=22,x0=W/2-n*bw/2,yb=H-118;g.fillStyle='rgba(8,10,8,.55)';rr(g,x0-48,yb-16,n*bw+60,32,16);g.fill();
+    g.font=`700 14px ${FU}`;g.textAlign='left';g.fillStyle=b<.3&&Math.sin(T*9)>0?'#ff6a50':'rgba(236,230,210,.85)';g.fillText('AIR',x0-38,yb+5);
+    for(let i=0;i<n;i++){const f=clamp(b*n-i,0,1);g.beginPath();g.arc(x0+i*bw+bw/2,yb,7,0,TAU);g.strokeStyle='rgba(200,235,245,.55)';g.lineWidth=1.5;g.stroke();if(f>0){g.fillStyle=`rgba(180,225,240,${.35+.55*f})`;g.beginPath();g.arc(x0+i*bw+bw/2,yb,7*f,0,TAU);g.fill()}}
+    if(DIVE.held){g.textAlign='center';g.font=`600 16px ${FU}`;g.fillStyle='#ece6d2';g.fillText('Carrying the med kit',W/2,yb-26)}}
+  if(DIVE.u>0){const gr=g.createRadialGradient(W/2,H/2,H*.2,W/2,H/2,H*.9);gr.addColorStop(0,'rgba(10,40,40,0)');gr.addColorStop(1,'rgba(4,18,20,.55)');g.fillStyle=gr;g.fillRect(0,0,W,H)}
   // crosshair + throw charge
   const cx=W/2,cy=H/2;g.fillStyle='rgba(236,230,210,.75)';g.beginPath();g.arc(cx,cy,2,0,TAU);g.fill();
   if(pl.draw>0){const k=pl.draw;g.strokeStyle='rgba(0,0,0,.45)';g.lineWidth=4;g.beginPath();g.arc(cx,cy,18,0,TAU);g.stroke();g.strokeStyle=k>.97?'#ffd27a':'#e8c088';g.beginPath();g.arc(cx,cy,18,-Math.PI/2,-Math.PI/2+TAU*k);g.stroke();g.fillStyle='rgba(236,230,210,.8)';for(const [dx,dy] of[[0,-1],[0,1],[-1,0],[1,0]])g.fillRect(cx+dx*(8-4*k)-1,cy+dy*(8-4*k)-1,2,2)}
@@ -7398,7 +7542,7 @@ const JOURNAL=[
  {c:5,t:'Hunger',x:'Berries are not enough. A bow beats a thrown hatchet: a springy ash stave, a sneaker lace for the string, straight willow shoots for arrows with their points hardened in the coals, and later foolbird feathers so they fly true. Draw, hold, release, then walk over and pull your arrows back out. Fish are deeper than they look in the water, so aim below them. Crying never fed him once. Work does.'},
  {c:6,t:'The moose',x:'A moose is not a monster. It is a very large animal that wants to be left alone. Watch for the pawing and the lowered head, then step aside the moment it charges.'},
  {c:7,t:'The storm',x:'A tornado shredded the shelter. But the storm also dragged the plane up from the lake bottom. Nothing out here is only good or only bad.'},
- {c:8,t:'The wreck',x:'The survival pack was still inside: first-aid kit, rations, fishing line, foil blanket and a small orange emergency transmitter.'},
+ {c:8,t:'The wreck',x:'Swam down into the sunken plane through the door gap and tugged the red med kit loose from the back seat. Strapped to it: the survival pack, with rations, fishing line, foil blanket and a small orange emergency transmitter. Air runs out fast down there; come up before it does.'},
  {c:9,t:'The signal',x:'Brian has stopped waiting to be found. Now he is helping himself get found: a transmitter, a signal fire on the high hill, and the long run back to the lake.'}];
 function journalEntries(){
   if(!S.open)return JOURNAL.filter(e=>e.c<=Math.max(0,S.ch)).map(e=>({h:(e.c===0?'PROLOGUE':'CHAPTER '+e.c)+' · '+e.t.toUpperCase(),x:e.x}));
@@ -7508,7 +7652,7 @@ function restoreCK(){if(!CK)return;const o=JSON.parse(CK);Object.assign(S,{day:o
 const setGoals=g=>{S.goals=g};
 const goalsDone=()=>S.goals.every(o=>o.d());
 async function begin(o){
-  scene='play';S.cut=false;S.qte=null;S.hint=o.hint||'';S.goals=[];S.chTitle=o.name||'';S.camLock=null;S.markFn=o.mark||null;
+  scene='play';S.cut=false;S.qte=null;S.swimOK=false;S.hint=o.hint||'';S.goals=[];S.chTitle=o.name||'';S.camLock=null;S.markFn=o.mark||null;
   S.limitR=o.limitR;S.limitMsg=o.msg||'';if(o.day)S.day=o.day;
   S.hunger=Math.max(S.hunger,50);S.thirst=Math.max(S.thirst,58);S.hp=Math.max(S.hp,55);
   S.tod=o.tod;S.todTo=o.todTo??null;S.todRate=o.rate??.05;S.clock=true;S.engine=0;S.storm=0;S.stormTarget=0;S.tornado=-1;S.stormRun=false;
@@ -7616,21 +7760,23 @@ async function ch7(){
   camS.shake=2;S.flash=1;Snd.thunder();S.tornPos.s=1.6;await wait(.9);S.flash=1;await fade(1,1.2);
   S.shelter=false;S.fl.wrecked=true;S.stormRun=false;S.stormTarget=0;S.storm=0;S.tornado=-1;for(const d of debris)GL.scene.remove(d.m);debris.length=0;S.planeUp=true;S.day=39;S.tod=6.4;S.todTo=null;
   await wait(1.2);await fade(0,1.6);
-  await say(['Silence. A fine, cold mist drifts off the lake.','And there, floating in the shallows where the storm dragged it up from the deep, is the plane.']);
+  await say(['Silence. A fine, cold mist drifts off the lake.','And there, out on the lake, is the plane. The storm has rolled it over in the deep water, and now its tail sticks up out of the lake like a white fin.']);
   S.cut=false;await endChapter();
 },
 async function ch8(){
-  await begin({name:'Chapter Eight',title:'CHAPTER EIGHT',sub:'The Wreck — Day 39',x:KEY.shelter[0]-8,z:KEY.shelter[1]-8,look:[40,-20],limitR:330,msg:'',day:39,tod:7,todTo:11,rate:.02,hint:`Walk back to the lake shore, then press ${U('E')} to dive. Tap ${U('USE')} rapidly to free the strap.`,mark:()=>!S.inv.pack?[[KEY.dive[0],KEY.dive[1],'Lake']]:[]});
-  S.planeUp=true;S.shelter=false;
-  if(!S.retry)await say(['Everything he lost is inside that plane. And maybe something that can bring rescue: the survival pack stowed behind the seats, if the water has not taken it.','Brian takes a deep breath. It is a long walk back to the lake.']);
-  setGoals([{t:'Dive to the wreck and bring up the survival pack',d:()=>S.inv.pack}]);
-  await until(goalsDone);await wait(1.2);
-  await say(['Inside the pack: a first-aid kit, dried rations, a coil of fishing line, a folded foil blanket and a small orange transmitter with a dented case.','He turns it over in his hands. If it works, someone, somewhere, might hear it.']);
+  await begin({name:'Chapter Eight',title:'CHAPTER EIGHT',sub:'The Wreck — Day 39',x:KEY.shelter[0]-8,z:KEY.shelter[1]-8,look:[40,-20],limitR:330,msg:'',day:39,tod:7,todTo:11,rate:.02,
+    hint:TOUCH?'Swim out to the tail. Look down and swim (or DODGE) to dive, JUMP to rise. Get in through the door gap.':`Swim out to the tail. Look down and swim (or hold ${U('C')}) to dive, ${U('SPACE')} to rise. Get in through the door gap.`,
+    mark:()=>!S.inv.pack?[[SUNK.x,SUNK.z,DIVE.held?'Surface!':'Plane']]:[[KEY.dive[0],KEY.dive[1],'Shore']]});
+  S.planeUp=true;S.shelter=false;S.swimOK=true;
+  if(!S.retry)await say(['Everything he lost is inside that plane. And maybe something that can bring rescue: the red med kit and the survival pack strapped behind the seats, if the water has not taken them.','The plane lies nose-down in deep water. The door on his side is gone. He will have to swim down into the cabin on one breath, and get back up before it runs out.']);
+  setGoals([{t:'Swim down into the plane and bring up the med kit',d:()=>S.inv.pack},{t:'Get back to shore',d:()=>S.inv.pack&&!pl.swim&&!pl.dive}]);
+  await until(goalsDone);S.swimOK=false;await wait(1.2);
+  await say(['Inside the red case: bandages, antiseptic, a few painkillers. Strapped to it, the survival pack: dried rations, a coil of fishing line, a folded foil blanket and a small orange transmitter with a dented case.','He turns the transmitter over in his hands. If it works, someone, somewhere, might hear it.']);
   await endChapter();
 },
 async function ch9(){
   await begin({name:'Chapter Nine',title:'CHAPTER NINE',sub:'The Signal — Day 40',x:KEY.dive[0],z:KEY.dive[1]+4,look:[150,86],limitR:335,msg:'',day:40,tod:9,todTo:13,rate:.012,hint:'Walk east to your camp (the ring of stones) and switch on the transmitter',mark:()=>!S.eltOn?[[KEY.pit[0],KEY.pit[1],'Camp']]:S.inv.signal<3?KEY.snag.filter((p,i)=>WORLD.snags[i].cut<3).map(p=>[p[0],p[1],'Snag']):!S.fl.signalLit?[[KEY.signal[0],KEY.signal[1],'Signal site']]:S.fl.floatplane?[[KEY.floatplane[0],KEY.floatplane[1],'Plane!']]:[]});
-  S.planeUp=true;S.inv.pack=1;S.inv.elt=1;S.hunger=Math.max(S.hunger,60);S.thirst=Math.max(S.thirst,60);
+  S.planeUp=true;S.inv.pack=1;S.inv.elt=1;if(S.inv.medkit===undefined)S.inv.medkit=1;S.hunger=Math.max(S.hunger,60);S.thirst=Math.max(S.thirst,60);
   setGoals([{t:'Switch on the transmitter at your camp',d:()=>S.eltOn}]);
   await until(()=>S.eltOn);S.hint='';
   await say(['A tiny red light blinks. Maybe it is calling out. Maybe it is only a light.','Day after day it blinks, and nothing answers. Brian decides not to wait for rescue to find him, but to help it. Smoke and flame, high on the eastern hill, where the whole sky can see.']);
@@ -7661,7 +7807,7 @@ function story_die(){
 }
 async function runFrom(i){resetSeq();for(let c=i;c<CHS.length;c++){S.ch=c;if(!S.retry||!CK){saveCK();if(c>=1&&!S.open)persistSave('story',snapStory(c))}await CHS[c]();S.retry=false}}
 function newGame(mode,sv){
-  resetSeq();Object.assign(S,{open:mode==='open',disc:{},discN:0,ch:-1,day:1,tod:10.4,todTo:null,storm:0,stormTarget:0,hp:100,hunger:85,thirst:85,inv:{branches:0,tinder:0,wood:0,meat:0,fish:0,signal:0,pack:0,elt:0,stave:0,shoots:0,arrows:0,feathers:0},weapon:'hatchet',fl:{},goals:[],fire:false,shelter:false,eltOn:false,planeUp:false,tornado:-1,stats:{birds:0,fish:0},retry:false,cut:false,qte:null,camLock:null,journal:false});
+  resetSeq();Object.assign(S,{open:mode==='open',disc:{},discN:0,ch:-1,day:1,tod:10.4,todTo:null,storm:0,stormTarget:0,hp:100,hunger:85,thirst:85,inv:{branches:0,tinder:0,wood:0,meat:0,fish:0,signal:0,pack:0,elt:0,stave:0,shoots:0,arrows:0,feathers:0,medkit:0},weapon:'hatchet',fl:{},goals:[],fire:false,shelter:false,eltOn:false,planeUp:mode==='open',tornado:-1,stats:{birds:0,fish:0},retry:false,cut:false,qte:null,camLock:null,journal:false});
   [...WORLD.stumps,...WORLD.snags].forEach(p=>{p.cut=0});CK=null;clearBirds();clearBeasts();clearArrows();setWeapon('hatchet',true);roamPack=null;if(moose){GL.scene.remove(moose.m);moose=null}Snd.init();FADE.a=1;FADE.to=1;
   if(mode==='open'){if(sv)openResume(sv);else openRun()}
   else if(sv&&sv.ck){CK=sv.ck;restoreCK();[...WORLD.stumps,...WORLD.snags].forEach((q,i)=>{q.cut=(sv.cuts&&sv.cuts[i])||0});S.retry=false;S.paused=false;runFrom(sv.ch)}
@@ -7669,11 +7815,12 @@ function newGame(mode,sv){
 }
 /* ================= OPEN WORLD ================= */
 function openSetup(){
+  S.planeUp=true;
   for(let i=0,t=0;i<4&&t<200;t++){const a=Math.random()*TAU,d=rnd(26,60),x=pl.x+Math.cos(a)*d,z=pl.z+Math.sin(a)*d,h=gh(x,z);if(h>1.5&&h<16&&waterDepthAt(x,z)<=0&&splat(x,z,h,0)[0]<.25){spawnBird(x,z);i++}}
   S.hint=TOUCH?'Joystick to move · drag the screen to look · USE to interact':'WASD move · mouse look · SHIFT run · SPACE jump · E use · J field notes';
   S.markFn=()=>{const m=[];for(const p of POIS){if(S.disc[p.id])m.push([p.x,p.z,p.name.replace(/^The /,'')]);else if(S.fl.perch)m.push([p.x,p.z,'?'])}if(S.shelter)m.push([KEY.shelter[0],KEY.shelter[1],'Shelter']);if(S.fire)m.push([KEY.pit[0],KEY.pit[1],'Camp']);return m};
   setGoals([{t:'Drink at the lake',d:()=>S.fl.drank},{t:'Build a shelter at the rock wall',d:()=>S.shelter},{t:'Make a fire',d:()=>S.fire},{t:'Make a bow and arrows',d:()=>S.fl.bow},{t:'Hunt a foolbird and cook it',d:()=>S.fl.cooked},{t:'Spear a fish in the stream',d:()=>S.stats.fish>0},
-    {t:()=>`Find landmarks (${S.discN}/${POIS.length})`,d:()=>S.discN>=POIS.length},{t:'Recover the survival pack',d:()=>S.inv.pack},{t:'Signal for rescue',d:()=>S.fl.signalLit}]);
+    {t:()=>`Find landmarks (${S.discN}/${POIS.length})`,d:()=>S.discN>=POIS.length},{t:'Dive into the sunken plane for the med kit',d:()=>S.inv.pack},{t:'Signal for rescue',d:()=>S.fl.signalLit}]);
 }
 async function openRun(){
   resetSeq();S.open=true;S.ch=10;S.retry=false;scene='play';S.cut=false;S.qte=null;S.camLock=null;S.chTitle='SURVIVAL LOG';S.limitR=1e9;S.limitMsg='';
@@ -7735,7 +7882,7 @@ function worldUpdate(dt,camPos){
   if(Math.random()<dt*7*nightF(S.tod)*(1-S.storm)&&scene!=='flight')PSA.spawn(cx+rnd(-16,16),gh(cx,cz)+rnd(.4,3),cz+rnd(-16,16),rnd(-.2,.2),rnd(-.1,.2),rnd(-.2,.2),rnd(3,5),.09,[.75,1,.4],0,0,.8);
   if(S.stormRun&&S.storm>.2)for(let i=0;i<S.storm*2.2;i++)PSN.spawn(cx-rnd(8,22),cy+rnd(-1,5),cz+rnd(-16,16),rnd(10,17),rnd(-1,2),rnd(-3,3),rnd(1.6,2.6),rnd(.06,.14),[.32,.42,.2],-.3,0,.9);
   if(S.mosq&&scene==='play'&&!nearFire(16)&&pl.x<150)for(let i=0;i<2;i++)PSN.spawn(cx+rnd(-.7,.7),cy+rnd(-.5,.5),cz+rnd(-.7,.7),rnd(-1.5,1.5),rnd(-1,1),rnd(-1.5,1.5),.35,.012,[.05,.05,.05],0,0,.9);
-  ducksUpdate(dt);arrowsUpdate(dt);farWalk();
+  ducksUpdate(dt);arrowsUpdate(dt);farWalk();diveEnv();
   PSN.update(dt);PSA.update(dt);
   const rain=GL.rain,rk=S.open?WX.rain:S.storm;rain.visible=rk>.1;rain.material.uniforms.uAlpha.value=clamp(rk*1.2,0,1);rain.material.uniforms.uCam.value.set(cx,cy,cz);rain.material.uniforms.uSlant.value.set(.28+(S.open?WX.wind:S.storm)*.4,0);
   const tn=GL.tornado;tn.visible=S.tornado>=0;if(tn.visible){tn.position.set(S.tornPos.x,gh(S.tornPos.x,S.tornPos.z)-2,S.tornPos.z);tn.scale.setScalar(S.tornPos.s);tn.material.uniforms.uAlpha.value=clamp(S.storm*1.1,0,.95)}
@@ -7805,7 +7952,7 @@ async function boot(){
   window.__bt=[];for(let i=0;i<BUILD3D.length;i++){await new Promise(r=>setTimeout(r,12));const t0=performance.now();try{BUILD3D[i]();window.__bt.push([i,Math.round(performance.now()-t0)])}catch(e){console.error('build step',i,e);LOADMSG='Could not start the 3D view.';return}LOADK=(i+1)/BUILD3D.length;LOADMSG=msgs[Math.floor(LOADK*msgs.length*.999)]}
   loadSaves();saveInit();if(SaveSys.saved.story&&!SaveSys.saved.open)S.menu=1;
   fit();scene='title';placePlayer(KEY.spawn[0],KEY.spawn[1],0);S.tod=18.7;FADE.a=1;FADE.to=0;FADE.sp=1;
-  window.__game={farShow,FL_PASS,makePerson,dressPilot,loadPeople,FAR,farH,flGround,farTrees,FL_DIR,FL_GO,FL_LAKE,dlgTime,makeRig,RIGS,SPECIES,quadGait,makeBeastModel,makeMooseModel,makeBirdModel,makeDuckModel,makeLoon,makePorcupine,BVM,ARW,setWeapon,shootArrow,BOWC,fish,makeAL60,PEOPLE,ducks,spawnDuck,killDuck,qualityGov,frameStats,Q,QUAL,applyQuality,setGraphics,SaveSys,persistSave,snapOpen,saveOpenNow,openResume,beasts,spawnBeast,beastHit,TERR,WX,WXT,wxSet,lightningStrike,get VM(){return VM},POIS,TX,VEG,S,pl,cam:GL.cam,GL,WORLD,CHS,KEY,newGame,runFrom,FL,IA,DLG,hat,get moose(){return moose},get birds(){return birds},get scene(){return scene},set scene(v){scene=v},MINI,say,startMini,spawnMoose,spawnBird,get ia(){return ia},ENVS,PSN,PSA,FADE,POST,CARD,facingWater,waterDepthAt,gh,step:stepSim,render:renderNow,press:k=>{hit[k]=true},down:c=>keysDown.add(c),up:c=>keysDown.delete(c),look};
+  window.__game={DIVE,SUNK,diveStart,wreckCollide,kitWorld,canSwim,farShow,FL_PASS,makePerson,dressPilot,loadPeople,FAR,farH,flGround,farTrees,FL_DIR,FL_GO,FL_LAKE,dlgTime,makeRig,RIGS,SPECIES,quadGait,makeBeastModel,makeMooseModel,makeBirdModel,makeDuckModel,makeLoon,makePorcupine,BVM,ARW,setWeapon,shootArrow,BOWC,fish,makeAL60,PEOPLE,ducks,spawnDuck,killDuck,qualityGov,frameStats,Q,QUAL,applyQuality,setGraphics,SaveSys,persistSave,snapOpen,saveOpenNow,openResume,beasts,spawnBeast,beastHit,TERR,WX,WXT,wxSet,lightningStrike,get VM(){return VM},POIS,TX,VEG,S,pl,cam:GL.cam,GL,WORLD,CHS,KEY,newGame,runFrom,FL,IA,DLG,hat,get moose(){return moose},get birds(){return birds},get scene(){return scene},set scene(v){scene=v},MINI,say,startMini,spawnMoose,spawnBird,get ia(){return ia},ENVS,PSN,PSA,FADE,POST,CARD,facingWater,waterDepthAt,gh,step:stepSim,render:renderNow,press:k=>{hit[k]=true},down:c=>keysDown.add(c),up:c=>keysDown.delete(c),look};
   window.__ready=true;
 }
 onUnlock=()=>{if(scene==='play'&&!MINI.on&&!S.cut&&!pl.dead&&!S.paused){S.paused=true;S.pauseSel=0}};
