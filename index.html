@@ -5125,13 +5125,16 @@ class PS{
     this.col[i*4]=col[0];this.col[i*4+1]=col[1];this.col[i*4+2]=col[2];this.col[i*4+3]=this.a0[i];this.size[i]=size;
   }
   update(dt){
+    let live=0;
     for(let i=0;i<this.n;i++){
-      if(this.life[i]<=0)continue;this.life[i]-=dt;
+      if(this.life[i]<=0)continue;live++;this.life[i]-=dt;
       if(this.life[i]<=0){this.size[i]=0;this.col[i*4+3]=0;continue}
       this.vel[i*3+1]+=this.grav[i]*dt;this.pos[i*3]+=this.vel[i*3]*dt;this.pos[i*3+1]+=this.vel[i*3+1]*dt;this.pos[i*3+2]+=this.vel[i*3+2]*dt;
       const k=this.life[i]/this.maxLife[i];this.size0[i]+=this.grow[i]*dt;this.size[i]=this.size0[i];this.col[i*4+3]=this.a0[i]*Math.min(1,k*3)*(this.additive?1:Math.min(1,(1-k)*8+.0)*Math.min(1,k*1.4));
     }
-    this.geo.attributes.position.needsUpdate=true;this.geo.attributes.pcol.needsUpdate=true;this.geo.attributes.size.needsUpdate=true;
+    // only the live part of the buffer is drawn and sent to the GPU, and nothing at all once every particle has gone
+    while(this.n>0&&this.life[this.n-1]<=0)this.n--;this.geo.setDrawRange(0,this.n);
+    if(live&&this.n>0){const A=this.geo.attributes;for(const [a,k] of[[A.position,3],[A.pcol,4],[A.size,1]]){a.updateRange.offset=0;a.updateRange.count=this.n*k;a.needsUpdate=true}}
   }
 }
 let PSN=null,PSA=null;
@@ -5626,6 +5629,8 @@ const fwdV=(yaw=pl.yaw)=>V3(-Math.sin(yaw),0,-Math.cos(yaw)),rightV=(yaw=pl.yaw)
 const yawTo=(x,z)=>Math.atan2(-(x-pl.x),-(z-pl.z));
 function lookDir(){const cy=Math.cos(pl.pitch);return V3(-Math.sin(pl.yaw)*cy,Math.sin(pl.pitch),-Math.cos(pl.yaw)*cy)}
 /* how far a point is inside the nearest collider (0 = clear) */
+/* how far (x,z) lies outside the area this mode lets Brian walk or swim in (0 = inside) */
+function areaOut(x,z){return S.open?Math.max(0,WB.x0+14-x,x-(WB.x1-14),WB.z0+14-z,z-(WB.z1-14)):Math.max(0,x-S.limitR,-34-x,z-175,-60-z)}
 function colPen(x,z,pad=.38){let m=0;for(const c of colliders(x,z)){const d=c.r+pad-Math.hypot(c.x-x,c.z-z);if(d>m)m=d}return m}
 /* the closest spot to (x,z) where Brian is not standing inside a tree, rock or wall */
 function freeSpot(x,z){if(colPen(x,z,.42)<=0)return[x,z];for(let r=.3;r<=6;r+=.3)for(let k=0;k<16;k++){const a=k/16*Math.PI*2,nx=x+Math.cos(a)*r,nz=z+Math.sin(a)*r;if(colPen(nx,nz,.42)<=0&&waterDepthAt(nx,nz)<.6)return[nx,nz]}return[x,z]}
@@ -5750,7 +5755,7 @@ function playerUpdate(dt){
   const tryMove=(nx,nz)=>{
     if(waterDepthAt(nx,nz)>.95&&!canSwim())return false;
     for(const c of colliders(nx,nz)){const dn=Math.hypot(c.x-nx,c.z-nz);if(dn<c.r+.38&&dn<=Math.hypot(c.x-pl.x,c.z-pl.z))return false}   // stepping away from something you overlap is always allowed
-    if(S.open){if(nx<WB.x0+14||nx>WB.x1-14||nz<WB.z0+14||nz>WB.z1-14)return false}else if(nx>S.limitR||nx<-34||nz>175||nz<-60)return false;
+    {const o=areaOut(nx,nz);if(o>0&&o>=areaOut(pl.x,pl.z)-1e-6)return false}   // outside the playable area only a step back toward it is allowed
     if(pl.on&&!pl.swim){const g0=gh(pl.x,pl.z),g1=gh(nx,nz),dd=Math.hypot(nx-pl.x,nz-pl.z);if(dd>1e-4&&(g1-g0)/dd>1.5&&g1-g0>.03)return false}
     return true};
   let nx=pl.x+pl.vx*dt,nz=pl.z+pl.vz*dt;
@@ -5806,7 +5811,7 @@ function titleCamera(dt){const c=GL.cam,a=T*.045+.6,cx=22,cz=-6;c.position.set(c
 /* ---------- viewmodel animation ---------- */
 function updateViewmodel(dt){
   if(!VM)return;const show=scene==='play'&&!S.camLock&&!MINI.on;GL.vmOn=show;
-  {const b=TOUCH&&document.querySelector('#touch [data-k=throw]'),t=pl.swim||pl.dive?'Stroke':'Axe';if(b&&b.textContent!==t)b.textContent=t}
+  if(TOUCH){const b=VM.axeBtn||(VM.axeBtn=document.querySelector('#touch [data-k=throw]')),t=pl.swim||pl.dive?'Stroke':'Axe';if(b&&b.textContent!==t)b.textContent=t}
   if(!show)return;if(pl.swim||pl.dive){swimVM(dt);return}VM.L.children[0].rotation.set(0,.2,0);
   const R=VM.R,L=VM.L,bobA=pl.on&&!pl.roll?Math.min(1,pl.sp/4):0,bx=Math.sin(pl.bob*.5)*.012*bobA,by=Math.abs(Math.sin(pl.bob))*.02*bobA;
   let tp=V3(.28+bx,-.155+by+Math.sin(T*1.5)*.003,-.34),tr=V3(-.1,.22,.1),lp=V3(-.3-bx,-.38+by,-.3),lr=V3(-.12,-.2,-.08);
@@ -5898,7 +5903,7 @@ function wanderTo(b,dt,spd){
 function wolfAI(b,dt){
   const o=BST.wolf,dx=pl.x-b.x,dz=pl.z-b.z,d=Math.hypot(dx,dz),toP=Math.atan2(dx,dz),fireD=nearestFire(b.x,b.z),plFire=nearFire(10),runner=isDown('run')&&pl.sp>3;
   b.t-=dt;b.cd=Math.max(0,b.cd-dt);b.bite=Math.max(0,b.bite-dt*2.2);
-  const sees=!pl.dead&&!S.cut&&d<o.sight*(runner?1.3:1)*(nightF(S.tod)>.4?1.25:1)&&!(pl.swim&&d>8);
+  const sees=!pl.dead&&!S.cut&&d<o.sight*(runner?1.3:1)*(nightF(S.tod)>.4?1.25:1)&&!((pl.swim||pl.dive)&&d>8);
   if(fireD<12&&b.state!=='flee'){b.state='flee';b.flee=6}
   switch(b.state){
     case'wander':if(b.roam&&!sees&&!plFire&&!pl.dead){steer(b,pl.x+Math.sin(b.t*.7)*12,pl.z+Math.cos(b.t*.5)*12,o.spd*2.6,dt,3);b.head=lerp(b.head,.25,dt*3)}else wanderTo(b,dt,o.spd);if(sees&&!plFire){b.state='alert';b.t=1.3;if(!b.terr||Math.random()<.5)if(Snd.growl)Snd.growl(.7)}break;
@@ -5916,7 +5921,7 @@ function wolfAI(b,dt){
       if(plFire&&d>3){b.state='circle';b.t=0;break}
       b.head=lerp(b.head,.35,dt*6);
       if(d>o.melee-.6){steer(b,pl.x,pl.z,o.run,dt,7)}else{b.yaw+=clamp(angDiff(b.yaw,toP),-8*dt,8*dt);b.sp=lerp(b.sp,pl.sp*.8,dt*6);b.x+=(pl.vx*.6)*dt;b.z+=(pl.vz*.6)*dt;if(b.cd<=0){b.cd=o.biteCd+Math.random()*.5;wolfBite(b)}}
-      if(pl.swim&&d<30){b.state='circle';b.t=0}
+      if((pl.swim||pl.dive)&&d<30){b.state='circle';b.t=0}
       if(pl.dead||S.cut){b.state='wander'}break}
     case'flee':{b.flee-=dt;const fa=fireD<14?Math.atan2(b.x-pl.x,b.z-pl.z):toP+Math.PI;steer(b,b.x+Math.sin(fa)*20,b.z+Math.cos(fa)*20,o.run*.92,dt,5);b.head=lerp(b.head,0,dt*3);if(b.flee<=0){b.state=b.roam?'wander':'wander';b.hr=b.roam?160:b.hr;if(b.roam)b.hx=b.x,b.hz=b.z}break}
   }
@@ -5924,7 +5929,7 @@ function wolfAI(b,dt){
 function bearAI(b,dt){
   const o=BST.bear,dx=pl.x-b.x,dz=pl.z-b.z,d=Math.hypot(dx,dz),toP=Math.atan2(dx,dz),fireD=nearestFire(b.x,b.z),plFire=nearFire(11),runner=isDown('run')&&pl.sp>3;
   b.t+=dt;b.cd=Math.max(0,b.cd-dt);b.woundT=Math.max(0,b.woundT-dt);
-  const sees=!pl.dead&&!S.cut&&d<o.sight*(runner?1.25:1)&&!(pl.swim&&d>10);
+  const sees=!pl.dead&&!S.cut&&d<o.sight*(runner?1.25:1)&&!((pl.swim||pl.dive)&&d>10);
   if(fireD<11&&!['flee','dead'].includes(b.state)){b.state='flee';b.flee=7}
   switch(b.state){
     case'wander':b.t=Math.max(0,b.t-dt);b.rise=lerp(b.rise,0,dt*4);if(b.forage>0){b.forage-=dt;b.head=lerp(b.head,.9,dt*4);idle(b,dt)}else{wanderTo(b,dt,o.spd);if(Math.random()<dt*.04)b.forage=rnd(3,7)}
@@ -6752,7 +6757,7 @@ function diveMove(dt,fw,st){
   DIVE.vx=lerp(DIVE.vx,wx*spd,k);DIVE.vz=lerp(DIVE.vz,wz*spd,k);DIVE.vy=lerp(DIVE.vy,wy*spd+(Math.abs(wy)<.05?lift:0),k);
   swimPush(dt,f,true);
   let x=pl.x+DIVE.vx*dt,z=pl.z+DIVE.vz*dt,y=DIVE.hy+DIVE.vy*dt;
-  if(S.open){x=clamp(x,WB.x0+14,WB.x1-14);z=clamp(z,WB.z0+14,WB.z1-14)}
+  if(areaOut(x,z)>areaOut(pl.x,pl.z)){x=pl.x;z=pl.z;DIVE.vx*=-.3;DIVE.vz*=-.3}   // the same edges as on the surface: no slipping out of a chapter's area under water
   const p=wreckCollide(V3(x,y,z));x=p.x;y=p.y;z=p.z;
   const g=gh(x,z);if(y<g+.32){y=g+.32;if(DIVE.vy<-.3||pl.sp>.8)stirSilt(x,y-.25,z);DIVE.vy=Math.max(0,DIVE.vy)}
   if(DIVE.floor){DIVE.floor=0;if(pl.sp>.6||DIVE.vy<-.3)stirSilt(x,y-.25,z)}
@@ -6848,6 +6853,7 @@ function diveEnv(){
    take more swings), the tree creaks, tips away from Brian and crashes down, leaving a stump and giving wood:
    logs and branches, plus birch bark from birches. Saplings come down in one swing for a bundle of branches.
    The trees you have felled are remembered in S.fl.felled, so a saved game keeps its clearings. */
+const NO_FELLED=[];   // one shared empty list, so an untouched forest is not re-synced every frame
 const TREE={grid:new Map(),sig:null,fall:[],hud:0,hk:0,stumps:null,ready:false};
 const TREE_CELL=8,tkey=(x,z)=>Math.floor(x/TREE_CELL)+','+Math.floor(z/TREE_CELL);
 const treeNeed=t=>t.s<=.55?1:t.s>2?12:Math.round(2+t.s*3);   // swings to fell it
@@ -6869,7 +6875,7 @@ function treeTarget(reach=1.65,cone=.55){
 }
 /* bring the world in line with S.fl.felled (a new game, a loaded save or a restarted chapter all change it) */
 function treesSync(force){
-  if(!TREE.ready)return;const list=S.fl&&S.fl.felled||[];  if(!force&&list===TREE.list&&list.length===TREE.len)return;TREE.list=list;TREE.len=list.length;
+  if(!TREE.ready)return;const list=S.fl&&S.fl.felled||NO_FELLED;  if(!force&&list===TREE.list&&list.length===TREE.len)return;TREE.list=list;TREE.len=list.length;
   const set=new Set(list);
   for(const t of VEG.items){const cut=set.has(t.i);if(cut===!!t.cut)continue;t.cut=cut;t.hits=0;
     if(t.col){const k=ckey(Math.floor(t.col.x/CC),Math.floor(t.col.z/CC)),a=WORLD.cols.get(k);if(cut){if(a){const j=a.indexOf(t.col);if(j>=0)a.splice(j,1)}}else if(a&&a.indexOf(t.col)<0)a.push(t.col)}}
@@ -6983,7 +6989,7 @@ function fishMat(spot,o){
 const lakeT=(x,z)=>Math.hypot((x-LAKE.cx)/LAKE.rx,(z-LAKE.cz)/LAKE.rz);
 const fishDepth=(x,z)=>lakeT(x,z)<.985?-gh(x,z):0;
 /* where pike may not lurk: the wreck and the swim out to it, so the story dive stays fair */
-const pikeOK=(x,z)=>Math.hypot(x-SUNK.x,z-SUNK.z)>16&&distSeg(x,z,KEY.dive[0],KEY.dive[1],SUNK.x,SUNK.z)>14&&Math.hypot(x-KEY.spawn[0],z-KEY.spawn[1])>24;
+const pikeOK=(x,z)=>Math.hypot(x-SUNK.x,z-SUNK.z)>16&&distSeg(x,z,KEY.dive[0],KEY.dive[1],SUNK.x,SUNK.z)>14&&Math.hypot(x-KEY.spawn[0],z-KEY.spawn[1])>24&&Math.hypot(x-KEY.floatplane[0],z-KEY.floatplane[1])>24;   // nor by the rescue plane
 function distSeg(x,z,ax,az,bx,bz){const vx=bx-ax,vz=bz-az,t=clamp(((x-ax)*vx+(z-az)*vz)/(vx*vx+vz*vz),0,1);return Math.hypot(x-ax-vx*t,z-az-vz*t)}
 function fishSpot(sp,cx,cz,r,R){
   for(let i=0;i<40;i++){const a=R()*TAU,d=Math.sqrt(R())*r,x=cx+Math.cos(a)*d,z=cz+Math.sin(a)*d,dep=fishDepth(x,z);
@@ -7034,7 +7040,7 @@ function lakeFishUpdate(dt){
     if(camNear)for(const f of LF.list){if(f.kind!==kind||f.dead)continue;if((f.x-cam.x)**2+(f.z-cam.z)**2>55*55)continue;if(n>=S2.cap)break;
       const h=Math.hypot(f.vx,f.vz),yaw=h>.02?Math.atan2(-f.vz,f.vx):f.yaw||0;f.yaw=yaw;_fe.set(0,yaw,clamp(Math.atan2(f.vy,h+.05),-.5,.5));_fq.setFromEuler(_fe);
       _fm.compose(_fv.set(f.x,f.y,f.z),_fq,_fs.setScalar(f.size));im.setMatrixAt(n,_fm);im.setColorAt(n,_fc.setScalar(f.tint));sw.setXY(n,f.ph,f.sw||0);n++}
-    im.count=n;im.instanceMatrix.needsUpdate=true;if(im.instanceColor)im.instanceColor.needsUpdate=true;sw.needsUpdate=true}
+    im.count=n;if(n){im.instanceMatrix.needsUpdate=true;if(im.instanceColor)im.instanceColor.needsUpdate=true;sw.needsUpdate=true}}
 }
 /* the pike: patrols its weed bed; if you swim close it stalks, circles in, darts and bites, then backs off */
 function pikeThink(f,dt,body,dP){
@@ -7768,10 +7774,10 @@ function drawHUD(g){
   // how deep the hatchet has bitten into the tree being chopped
   if(TREE.hud>0&&TREE.hk<1){const a=Math.min(1,TREE.hud*1.5),cx=W/2,cy=H/2;g.globalAlpha=a;g.strokeStyle='rgba(0,0,0,.45)';g.lineWidth=5;g.beginPath();g.arc(cx,cy,20,0,TAU);g.stroke();g.strokeStyle='#d9a35a';g.beginPath();g.arc(cx,cy,20,-Math.PI/2,-Math.PI/2+TAU*TREE.hk);g.stroke();g.globalAlpha=1}
   // air while under water
-  if(pl.dive||(S.breath??1)<.995){const b=S.breath??1,n=10,bw=22,x0=W/2-n*bw/2,yb=H-118;g.fillStyle='rgba(8,10,8,.55)';rr(g,x0-48,yb-16,n*bw+60,32,16);g.fill();
+  if(pl.dive||(S.breath??1)<.995){const b=S.breath??1,n=10,bw=22,x0=W/2-n*bw/2,yb=H-84;   // below the toasts, above the inventoryg.fillStyle='rgba(8,10,8,.55)';rr(g,x0-48,yb-16,n*bw+60,32,16);g.fill();
     g.font=`700 14px ${FU}`;g.textAlign='left';g.fillStyle=b<.3&&Math.sin(T*9)>0?'#ff6a50':'rgba(236,230,210,.85)';g.fillText('AIR',x0-38,yb+5);
     for(let i=0;i<n;i++){const f=clamp(b*n-i,0,1);g.beginPath();g.arc(x0+i*bw+bw/2,yb,7,0,TAU);g.strokeStyle='rgba(200,235,245,.55)';g.lineWidth=1.5;g.stroke();if(f>0){g.fillStyle=`rgba(180,225,240,${.35+.55*f})`;g.beginPath();g.arc(x0+i*bw+bw/2,yb,7*f,0,TAU);g.fill()}}
-    if(DIVE.held){g.textAlign='center';g.font=`600 16px ${FU}`;g.fillStyle='#ece6d2';g.fillText('Carrying the med kit',W/2,yb-26)}}
+    if(DIVE.held){g.textAlign='left';g.font=`700 14px ${FU}`;g.fillStyle='#e0453a';g.fillText('+ MED KIT',x0+n*bw+8,yb+5)}}
   // the strap: catch the marker inside the green band
   if(ia&&ia.o.dive&&!DIVE.held){const bw=320,bx=W/2-bw/2,by=H*.62+34,m=kitMarker(),n=S.fl.kitPulls|0;g.fillStyle='rgba(8,10,8,.7)';rr(g,bx-10,by-10,bw+20,34,10);g.fill();
     g.fillStyle='rgba(236,230,210,.18)';g.fillRect(bx,by,bw,14);g.fillStyle='rgba(120,210,110,.85)';g.fillRect(bx+(KIT.zone-KIT.w/2)*bw,by,KIT.w*bw,14);
@@ -8235,7 +8241,7 @@ async function boot(){
   window.__bt=[];for(let i=0;i<BUILD3D.length;i++){await new Promise(r=>setTimeout(r,12));const t0=performance.now();try{BUILD3D[i]();window.__bt.push([i,Math.round(performance.now()-t0)])}catch(e){console.error('build step',i,e);LOADMSG='Could not start the 3D view.';return}LOADK=(i+1)/BUILD3D.length;LOADMSG=msgs[Math.floor(LOADK*msgs.length*.999)]}
   loadSaves();saveInit();if(SaveSys.saved.story&&!SaveSys.saved.open)S.menu=1;
   fit();scene='title';placePlayer(KEY.spawn[0],KEY.spawn[1],0);S.tod=18.7;FADE.a=1;FADE.to=0;FADE.sp=1;
-  window.__game={LF,FISH_SP,lakeFishHit,TREE,VEG,treeTarget,treeHit,POND,streamX,colliders,canAct,getT:()=>T,SWIM,KIT,kitMarker,DIVE,SUNK,diveStart,wreckCollide,kitWorld,canSwim,farShow,FL_PASS,makePerson,dressPilot,loadPeople,FAR,farH,flGround,farTrees,FL_DIR,FL_GO,FL_LAKE,dlgTime,makeRig,RIGS,SPECIES,quadGait,makeBeastModel,makeMooseModel,makeBirdModel,makeDuckModel,makeLoon,makePorcupine,BVM,ARW,setWeapon,shootArrow,BOWC,fish,makeAL60,PEOPLE,ducks,spawnDuck,killDuck,qualityGov,frameStats,Q,QUAL,applyQuality,setGraphics,SaveSys,persistSave,snapOpen,saveOpenNow,openResume,beasts,spawnBeast,beastHit,TERR,WX,WXT,wxSet,lightningStrike,get VM(){return VM},POIS,TX,VEG,S,pl,cam:GL.cam,GL,WORLD,CHS,KEY,newGame,runFrom,FL,IA,DLG,hat,get moose(){return moose},get birds(){return birds},get scene(){return scene},set scene(v){scene=v},MINI,say,startMini,spawnMoose,spawnBird,get ia(){return ia},ENVS,PSN,PSA,FADE,POST,CARD,facingWater,waterDepthAt,gh,step:stepSim,render:renderNow,press:k=>{hit[k]=true},down:c=>keysDown.add(c),up:c=>keysDown.delete(c),look};
+  window.__game={canSaveNow,LF,FISH_SP,lakeFishHit,TREE,VEG,treeTarget,treeHit,POND,streamX,colliders,canAct,getT:()=>T,SWIM,KIT,kitMarker,DIVE,SUNK,diveStart,wreckCollide,kitWorld,canSwim,farShow,FL_PASS,makePerson,dressPilot,loadPeople,FAR,farH,flGround,farTrees,FL_DIR,FL_GO,FL_LAKE,dlgTime,makeRig,RIGS,SPECIES,quadGait,makeBeastModel,makeMooseModel,makeBirdModel,makeDuckModel,makeLoon,makePorcupine,BVM,ARW,setWeapon,shootArrow,BOWC,fish,makeAL60,PEOPLE,ducks,spawnDuck,killDuck,qualityGov,frameStats,Q,QUAL,applyQuality,setGraphics,SaveSys,persistSave,snapOpen,saveOpenNow,openResume,beasts,spawnBeast,beastHit,TERR,WX,WXT,wxSet,lightningStrike,get VM(){return VM},POIS,TX,VEG,S,pl,cam:GL.cam,GL,WORLD,CHS,KEY,newGame,runFrom,FL,IA,DLG,hat,get moose(){return moose},get birds(){return birds},get scene(){return scene},set scene(v){scene=v},MINI,say,startMini,spawnMoose,spawnBird,get ia(){return ia},ENVS,PSN,PSA,FADE,POST,CARD,facingWater,waterDepthAt,gh,step:stepSim,render:renderNow,press:k=>{hit[k]=true},down:c=>keysDown.add(c),up:c=>keysDown.delete(c),look};
   window.__ready=true;
 }
 onUnlock=()=>{if(scene==='play'&&!MINI.on&&!S.cut&&!pl.dead&&!S.paused){S.paused=true;S.pauseSel=0}};
