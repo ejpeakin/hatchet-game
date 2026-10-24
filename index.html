@@ -3880,7 +3880,7 @@ const nightF=t=>t<12?1-sstep(5,7,t):sstep(19,21,t);
    on this device), so passing the link on, or typing someone else's email, lets nobody else in. The game keeps
    loading behind the screen, and no key or click reaches it until access is granted. An empty ACCESS_URL turns
    the screen off. */
-const ACCESS_URL='';
+const ACCESS_URL='https://script.google.com/macros/s/AKfycbxJ8e_Xw-SMzrZC3VngnBmTZ8A5prek59FYY_de-Nx9ZEaFNFh1vzgtIzcALivMCmWpOA/exec';
 const GATE={on:false,s:null,poll:null,pollUntil:0,busy:false};
 const GATE_KEY='hatchet.access';
 function gateLoad(){try{const s=JSON.parse(localStorage.getItem(GATE_KEY)||'null');if(s&&/^[0-9a-f]{32}$/.test(s.key))return s}catch(e){}return null}
