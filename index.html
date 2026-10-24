@@ -79,6 +79,10 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);overflow:hi
       <label for="gateEmail">Email</label><input id="gateEmail" name="email" type="email" autocomplete="email" inputmode="email" maxlength="120" required placeholder="you@example.com">
       <button class="go" id="gateGo" type="submit">Ask to play</button>
     </div>
+    <div id="gateCode" hidden>
+      <label for="gateCodeIn">Unlock code</label><input id="gateCodeIn" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" maxlength="12" placeholder="6 letters and numbers">
+      <button class="go" id="gateUnlock" type="button">Unlock</button>
+    </div>
     <p class="note" id="gateNote" role="status" aria-live="polite"></p>
     <button class="alt" id="gateAlt" type="button" hidden></button>
   </form>
@@ -3889,7 +3893,8 @@ const nightF=t=>t<12?1-sstep(5,7,t):sstep(19,21,t);
    on this device), so passing the link on, or typing someone else's email, lets nobody else in. The game keeps
    loading behind the screen, and no key or click reaches it until access is granted. An empty ACCESS_URL turns
    the screen off. */
-const ACCESS_URL='https://script.google.com/macros/s/AKfycbxJ8e_Xw-SMzrZC3VngnBmTZ8A5prek59FYY_de-Nx9ZEaFNFh1vzgtIzcALivMCmWpOA/exec';
+const ACCESS_URL='';   // off: the school account cannot publish the script for anyone to reach, so the unlock codes below are used instead
+// (the owner's script: https://script.google.com/macros/s/AKfycbxJ8e_Xw-SMzrZC3VngnBmTZ8A5prek59FYY_de-Nx9ZEaFNFh1vzgtIzcALivMCmWpOA/exec)
 const GATE={on:false,s:null,poll:null,pollUntil:0,busy:false};
 const GATE_KEY='hatchet.access';
 function gateLoad(){try{const s=JSON.parse(localStorage.getItem(GATE_KEY)||'null');if(s&&/^[0-9a-f]{32}$/.test(s.key))return s}catch(e){}return null}
@@ -3968,6 +3973,65 @@ function gateInit(){
   if(GATE.s&&GATE.s.id){gateShow('Checking your access',{dots:true});gateCheck(true)}else gateForm();
 }
 gateInit();
+/* ================= INVITE-ONLY ACCESS BY UNLOCK CODE =================
+   With ACCESS_FORM set (the owner's email address, or the private alias FormSubmit gives it), a new player asks
+   to play with their name and email. FormSubmit (a free form-to-email service, no account needed) emails the owner
+   the request with that player's unlock code. To let them in, the owner replies with the code; the player types it
+   here and the game opens and remembers them on that device. A code only fits the email it was made for, so a
+   forwarded link still needs its own request. Someone who reads this page's code could work codes out: like any
+   check inside a public page, it keeps out people who only have the link. Off on the private claude.ai copy. */
+const ACCESS_FORM='egarcia29@setoncatholic.org';
+const GATE_SALT='hatchet|trail|north-1987';
+function gateCodeFor(email){
+  const s=GATE_SALT+'|'+String(email).trim().toLowerCase(),A='ABCDEFGHJKMNPQRSTUVWXYZ23456789';let a=0x811c9dc5,b=0x9e3779b9;
+  for(let i=0;i<s.length;i++){const c=s.charCodeAt(i);a=Math.imul(a^c,16777619);b=Math.imul(b^c,2246822519);b^=b>>>13}
+  let o='',x=a>>>0,y=b>>>0;for(let i=0;i<6;i++){const v=i<3?x:y;o+=A[v%31];if(i<3)x=Math.floor(x/31);else y=Math.floor(y/31)}return o;
+}
+const gateEmailOK=e=>/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e);
+function codeScreen(note='',bad=false){
+  const s=GATE.s||{};GATE.alt='change';
+  gateShow(`Request sent for ${s.email}. When the owner says yes, they will email you an unlock code. Type it here:`,{note,bad,alt:'Use a different email'});
+  $('gateCode').hidden=false;setTimeout(()=>{try{$('gateCodeIn').focus()}catch(e){}},50);
+}
+function codeForm(note='',bad=false){GATE.alt='have';gateShow('This game is invite-only. Ask the owner to let you in: they will email you an unlock code.',{form:true,note,bad,alt:'I already have a code'});$('gateCode').hidden=true}
+async function codeRequest(ev){
+  ev.preventDefault();if(GATE.busy)return;
+  const email=$('gateEmail').value.trim(),name=$('gateName').value.trim().slice(0,60);
+  if(!gateEmailOK(email)){codeForm('Please enter a full email address, like name@example.com.',true);$('gateEmail').focus();return}
+  GATE.busy=true;$('gateGo').disabled=true;$('gateNote').textContent='Sending…';$('gateNote').classList.remove('bad');
+  try{
+    const r=await fetch('https://formsubmit.co/ajax/'+encodeURIComponent(ACCESS_FORM),{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json'},
+      body:JSON.stringify({name:name||'(no name)',email,_subject:`Hatchet Survival: ${name||email} wants to play`,_template:'box',_captcha:'false',
+        message:`${name||'Someone'} (${email}) asked to play Hatchet Survival.\n\nTo let them in, reply to this email with their unlock code: ${gateCodeFor(email)}\nTo say no, just ignore this email.`})});
+    const j=await r.json().catch(()=>({}));GATE.busy=false;$('gateGo').disabled=false;
+    if(String(j.success)==='true'){GATE.s={email,name,status:'asked'};gateSave();codeScreen()}
+    else if(/activat/i.test(j.message||''))codeForm('The owner still has to switch on email requests (they have been sent a link to do it). Please try again later.',true);
+    else codeForm('The email service turned the request down'+(j.message?': '+j.message:'.')+' Please try again later.',true);
+  }catch(e){GATE.busy=false;$('gateGo').disabled=false;codeForm('Could not reach the email service. Check your internet connection and try again.',true)}
+}
+function codeUnlock(){
+  const s=GATE.s||{},v=$('gateCodeIn').value.toUpperCase().replace(/[^A-Z0-9]/g,'');
+  if(!s.email){codeForm();return}
+  if(v.length!==6){codeScreen('The code is 6 letters and numbers.',true);return}
+  if(v!==gateCodeFor(s.email)){codeScreen(`That code does not match ${s.email}. Check it, or ask again with the email the owner replied to.`,true);return}
+  GATE.s={email:s.email,name:s.name,code:v,status:'approved'};gateSave();gateOpen();
+}
+function codeAlt(ev){
+  if(!ACCESS_FORM)return;ev.stopImmediatePropagation();
+  if(GATE.alt==='have'){const email=$('gateEmail').value.trim();if(!gateEmailOK(email)){codeForm('Type the email the owner sent the code to first.',true);$('gateEmail').focus();return}GATE.s={email,name:$('gateName').value.trim(),status:'asked'};gateSave();codeScreen()}
+  else{GATE.s=null;gateSave();$('gateCodeIn').value='';codeForm()}
+}
+function codeInit(){
+  if(!ACCESS_FORM||ACCESS_URL)return;
+  if(window.claude||/(^|\.)claude(usercontent)?\.(ai|com)$/.test(location.hostname))return;   // the claude.ai copy is private already
+  let s=null;try{s=JSON.parse(localStorage.getItem(GATE_KEY)||'null')}catch(e){}
+  if(s&&s.code&&s.email&&s.code===gateCodeFor(s.email))return;   // already let in on this device
+  GATE.on=true;GATE.s=s&&s.email?s:null;
+  $('gateF').addEventListener('submit',codeRequest);$('gateAlt').addEventListener('click',codeAlt);$('gateUnlock').addEventListener('click',codeUnlock);
+  $('gateCodeIn').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();codeUnlock()}});
+  if(GATE.s&&GATE.s.status==='asked')codeScreen();else codeForm();
+}
+codeInit();
 /* ================= GRAPHICS TOOLKIT (procedural textures, geometry) ================= */
 const V3=(x=0,y=0,z=0)=>new THREE.Vector3(x,y,z);
 function ihash(x,y){let h=Math.imul(x|0,374761393)+Math.imul(y|0,668265263)|0;h=Math.imul(h^(h>>>13),1274126177);return((h^(h>>>16))>>>0)/4294967296}
