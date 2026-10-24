@@ -33,6 +33,24 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);overflow:hi
 @media (hover:none) and (pointer:coarse){#pausebtn{display:block;right:auto;left:calc(50% + 34px)}#touch{display:flex}#snd{left:50%;right:auto;transform:translateX(-50%);bottom:calc(10px + env(safe-area-inset-bottom,0px))}}
 @media (orientation:portrait) and (max-width:700px){#rotate{display:block}}
 @media (prefers-reduced-motion:reduce){#grain{animation:none}}
+/* invite-only access screen (see the INVITE-ONLY ACCESS section of the script) */
+#gate{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;background:rgba(4,7,6,.78);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);touch-action:auto;overflow-y:auto}
+#gate[hidden]{display:none}
+#gate .card{width:100%;max-width:400px;box-sizing:border-box;padding:28px 24px 22px;border-radius:14px;background:rgba(14,19,16,.94);border:1px solid rgba(236,230,210,.16);box-shadow:0 18px 60px rgba(0,0,0,.5);text-align:center}
+#gate h1{margin:0;font:400 44px/1 'Alfa Slab One',Georgia,serif;letter-spacing:.04em;color:#e8c89a}
+#gate .sub{margin:12px 0 18px;font:italic 400 16px/1.45 'Lora',Georgia,serif;color:rgba(236,230,210,.82)}
+#gate label{display:block;text-align:left;margin:0 0 4px;font:600 13px/1.2 'Barlow Condensed',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:rgba(236,230,210,.62)}
+#gate input{display:block;width:100%;box-sizing:border-box;margin:0 0 14px;padding:11px 12px;border-radius:8px;border:1px solid rgba(236,230,210,.22);background:rgba(0,0,0,.35);color:var(--ink);font:500 18px/1.2 'Barlow Condensed',sans-serif;-webkit-user-select:text;user-select:text}
+#gate input:focus{outline:2px solid var(--ember);outline-offset:1px;border-color:transparent}
+#gate button{font:700 17px/1 'Barlow Condensed',sans-serif;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;border-radius:8px}
+#gate .go{width:100%;padding:13px 12px;border:0;background:var(--ember);color:#1a0f06}
+#gate .go:disabled{opacity:.55;cursor:default}
+#gate .alt{margin-top:12px;padding:8px 10px;border:1px solid rgba(236,230,210,.22);background:transparent;color:var(--ink);font-size:14px}
+#gate button:focus-visible{outline:2px solid var(--ember);outline-offset:2px}
+#gate .note{min-height:1.4em;margin:12px 0 0;font:500 16px/1.4 'Barlow Condensed',sans-serif;color:rgba(236,230,210,.75)}
+#gate .note.bad{color:#f0a07a}
+#gate .dots::after{content:'';animation:gdots 1.4s steps(4) infinite}
+@keyframes gdots{0%{content:''}25%{content:'.'}50%{content:'..'}75%{content:'...'}}
 </style>
 <div id="app"><div id="stage">
   <canvas id="gl" aria-label="First-person game view"></canvas>
@@ -43,6 +61,19 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);overflow:hi
 <button id="snd" aria-label="Toggle sound">♪</button>
 <button id="pausebtn" data-k="pause" aria-label="Pause">❚❚</button>
 <div id="rotate">Turn your phone sideways for the full view</div>
+<div id="gate" hidden role="dialog" aria-modal="true" aria-labelledby="gateT" aria-describedby="gateMsg">
+  <form class="card" id="gateF" novalidate>
+    <h1 id="gateT">HATCHET</h1>
+    <p class="sub" id="gateMsg">Checking your access<span class="dots"></span></p>
+    <div id="gateIn" hidden>
+      <label for="gateName">First name</label><input id="gateName" name="name" autocomplete="given-name" maxlength="60" placeholder="So the owner knows who you are">
+      <label for="gateEmail">Email</label><input id="gateEmail" name="email" type="email" autocomplete="email" inputmode="email" maxlength="120" required placeholder="you@example.com">
+      <button class="go" id="gateGo" type="submit">Ask to play</button>
+    </div>
+    <p class="note" id="gateNote" role="status" aria-live="polite"></p>
+    <button class="alt" id="gateAlt" type="button" hidden></button>
+  </form>
+</div>
 <div id="touch">
   <div id="joy" aria-label="Move"><i></i></div>
   <div class="r"><button data-k="throw" aria-label="Swing hatchet (hold to throw)">Axe</button><button data-k="jump" aria-label="Jump">Jump</button><button data-k="dodge" aria-label="Dodge">Dodge</button><button data-k="act" aria-label="Use">Use</button><button data-k="swap" aria-label="Switch between hatchet and bow">Swap</button></div>
@@ -3715,7 +3746,8 @@ const keysDown=new Set(),vk={};let hit={},rel={};const mouse={x:0,y:0},look={dx:
 const MAP={ArrowUp:'fwd',KeyW:'fwd',ArrowDown:'back',KeyS:'back',KeyA:'left',KeyD:'right',ArrowLeft:'lookL',ArrowRight:'lookR',Space:'jump',ShiftLeft:'run',ShiftRight:'run',KeyE:'act',Enter:'act',KeyF:'throw',KeyQ:'dodge',KeyC:'dodge',KeyM:'mute',KeyJ:'journal',Tab:'journal',Escape:'pause',KeyP:'pause',KeyN:'newg',F3:'fps',KeyG:'gfx',Digit1:'w1',Digit2:'w2',KeyX:'swap'};
 const REV={};for(const c in MAP)(REV[MAP[c]]=REV[MAP[c]]||[]).push(c);
 const isDown=a=>(vk[a]>0)||(REV[a]||[]).some(c=>keysDown.has(c));
-addEventListener('keydown',e=>{const a=MAP[e.code];if(!a)return;e.preventDefault();if(!e.repeat&&!isDown(a))hit[a]=true;keysDown.add(e.code);Snd.init();if(a==='mute'&&!e.repeat)Snd.toggle()});
+addEventListener('keydown',e=>{if(GATE.on)return;const a=MAP[e.code];if(!a)return;e.preventDefault();   // nothing reaches the game while the access screen is up
+if(!e.repeat&&!isDown(a))hit[a]=true;keysDown.add(e.code);Snd.init();if(a==='mute'&&!e.repeat)Snd.toggle()});
 addEventListener('keyup',e=>{const a=MAP[e.code];if(!a)return;keysDown.delete(e.code);if(!isDown(a))rel[a]=true});
 addEventListener('blur',()=>{keysDown.clear();for(const k in vk)vk[k]=0});
 document.querySelectorAll('[data-k]').forEach(b=>{const a=b.dataset.k;
@@ -3840,6 +3872,82 @@ function resetSeq(){runTok++;DLG.q.length=0;DLG.cur=null;DLG.auto=false;if(typeo
 const SKY=[[0,[6,10,22],[12,20,40],[26,34,56]],[5,[16,24,48],[70,64,96],[196,120,100]],[6.5,[58,100,156],[170,170,190],[250,190,130]],[9,[46,110,180],[130,178,214],[214,230,236]],[13,[34,100,178],[120,174,220],[208,228,240]],[17,[50,110,170],[160,190,210],[246,222,170]],[19,[44,58,110],[190,100,110],[250,160,80]],[20.5,[18,24,56],[70,56,100],[160,90,90]],[22,[8,12,26],[14,22,44],[28,36,58]],[24,[6,10,22],[12,20,40],[26,34,56]]];
 const SKYC={top:[40,100,170],mid:[120,170,210],hor:[200,225,235]};
 const nightF=t=>t<12?1-sstep(5,7,t):sstep(19,21,t);
+/* ================= INVITE-ONLY ACCESS =================
+   With ACCESS_URL set (the web-app address of the owner's Google Apps Script: access/Code.gs, set up as the
+   README describes), a new player has to ask for access with their email before the game opens. The script
+   emails the owner each request with Approve and Deny buttons and keeps the list in a Google Sheet; the moment
+   the owner approves, this screen opens the game. Approval belongs to the browser that asked (a random key kept
+   on this device), so passing the link on, or typing someone else's email, lets nobody else in. The game keeps
+   loading behind the screen, and no key or click reaches it until access is granted. An empty ACCESS_URL turns
+   the screen off. */
+const ACCESS_URL='';
+const GATE={on:false,s:null,poll:null,pollUntil:0,busy:false};
+const GATE_KEY='hatchet.access';
+function gateLoad(){try{const s=JSON.parse(localStorage.getItem(GATE_KEY)||'null');if(s&&/^[0-9a-f]{32}$/.test(s.key))return s}catch(e){}return null}
+function gateSave(){try{localStorage.setItem(GATE_KEY,JSON.stringify(GATE.s))}catch(e){}}
+function gateNewKey(){const a=new Uint8Array(16);crypto.getRandomValues(a);return Array.from(a,b=>b.toString(16).padStart(2,'0')).join('')}
+async function gateCall(params){
+  const r=await fetch(ACCESS_URL+(ACCESS_URL.includes('?')?'&':'?')+new URLSearchParams({...params,_:Date.now()}));   // a plain GET: no preflight, and Apps Script answers it from any site
+  if(!r.ok)throw new Error('HTTP '+r.status);const j=await r.json();if(!j||!j.ok)throw Object.assign(new Error(j&&j.error||'refused'),{server:true,code:j&&j.error});return j;
+}
+/* one function draws every state of the screen: what it says, whether the form shows, and the button under it */
+function gateShow(msg,{form=false,note='',bad=false,alt='',dots=false}={}){
+  $('gate').hidden=false;$('gateMsg').textContent=msg;if(dots){const d=document.createElement('span');d.className='dots';$('gateMsg').append(d)}
+  $('gateIn').hidden=!form;const n=$('gateNote');n.textContent=note;n.classList.toggle('bad',bad);
+  const b=$('gateAlt');b.hidden=!alt;b.textContent=alt;
+  if(form){const s=GATE.s||{};if(s.email&&!$('gateEmail').value)$('gateEmail').value=s.email;if(s.name&&!$('gateName').value)$('gateName').value=s.name;$('gateGo').disabled=false;setTimeout(()=>{try{$(s.email?'gateGo':'gateEmail').focus()}catch(e){}},50)}
+}
+function gateOpen(){
+  GATE.on=false;gateStopPoll();$('gate').hidden=true;if(GATE.s){GATE.s.status='approved';gateSave()}
+  try{cv.focus()}catch(e){}
+}
+function gateForm(note='',bad=false){GATE.alt=null;gateShow('This game is invite-only. Ask the owner to let you in: once they approve, the game opens right here.',{form:true,note,bad})}
+function gatePending(){
+  GATE.alt='change';
+  gateShow('Request sent! Waiting for the owner to approve you.',{note:'The game opens here by itself once you are approved, and you will get an email too. You can close this page and come back later.',alt:'Use a different email',dots:true});
+  gateStartPoll();
+}
+function gateStartPoll(){gateStopPoll();GATE.pollUntil=Date.now()+30*60e3;GATE.poll=setInterval(()=>{if(document.hidden)return;if(Date.now()>GATE.pollUntil){gateStopPoll();GATE.alt='check';gateShow('Still waiting for the owner to approve you.',{note:'Come back later, or check now.',alt:'Check again'});return}gateCheck(false)},20e3)}
+function gateStopPoll(){if(GATE.poll){clearInterval(GATE.poll);GATE.poll=null}}
+/* ask the script where this browser's request stands */
+async function gateCheck(first){
+  const s=GATE.s;if(!s||!s.id){gateForm();return}
+  if(GATE.busy)return;GATE.busy=true;
+  try{const j=await gateCall({action:'status',id:s.id,key:s.key});
+    if(j.status==='approved')gateOpen();
+    else if(j.status==='pending'){s.status='pending';gateSave();if(first||GATE.alt!=='change')gatePending()}
+    else if(j.status==='denied'){s.status='denied';gateSave();gateStopPoll();GATE.alt='again';gateShow('Your request was not approved.',{note:'If you think that is a mistake, ask the owner, then send a new request.',alt:'Ask again'})}
+    else{GATE.s={key:s.key,email:s.email,name:s.name};gateSave();gateForm(s.status==='approved'?'Your access was removed. You can ask again.':'')}}   // the owner removed the request
+  catch(e){
+    if(s.status==='approved'){gateOpen();return}   // no connection or a server hiccup: someone already approved still gets to play
+    if(first){GATE.alt='retry';gateShow('Could not reach the sign-up server.',{note:'Check your internet connection, then try again.',bad:true,alt:'Try again'})}}
+  finally{GATE.busy=false}
+}
+async function gateRequest(ev){
+  ev.preventDefault();if(GATE.busy)return;
+  const email=$('gateEmail').value.trim(),name=$('gateName').value.trim();
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)){$('gateNote').textContent='Please enter a full email address, like name@example.com.';$('gateNote').classList.add('bad');$('gateEmail').focus();return}
+  const s=GATE.s=GATE.s||{key:gateNewKey()};s.email=email;s.name=name;gateSave();
+  GATE.busy=true;$('gateGo').disabled=true;$('gateNote').textContent='Sending…';$('gateNote').classList.remove('bad');
+  try{const j=await gateCall({action:'request',email,name,key:s.key});s.id=j.id;s.status=j.status||'pending';gateSave();GATE.busy=false;if(s.status==='approved')gateOpen();else gatePending()}
+  catch(e){GATE.busy=false;$('gateGo').disabled=false;
+    gateForm(e.code==='busy'?'Lots of people are asking right now. Please try again in a little while.':e.code==='email'?'That email address does not look right.':'Could not send your request. Check your internet connection and try again.',true)}
+}
+function gateAlt(){
+  const a=GATE.alt;
+  if(a==='change'){gateStopPoll();GATE.s={key:gateNewKey(),name:GATE.s&&GATE.s.name};gateSave();$('gateEmail').value='';gateForm()}
+  else if(a==='again'){GATE.s={key:GATE.s.key,email:GATE.s.email,name:GATE.s.name};gateSave();gateForm()}
+  else{gateShow('Checking your access',{dots:true});gateCheck(true).then(()=>{if(GATE.on&&GATE.s&&GATE.s.status==='pending'&&!GATE.poll)gateStartPoll()})}
+}
+function gateInit(){
+  if(!ACCESS_URL)return;
+  GATE.on=true;GATE.s=gateLoad();$('gateF').addEventListener('submit',gateRequest);$('gateAlt').addEventListener('click',gateAlt);
+  addEventListener('focus',()=>{if(GATE.on&&GATE.poll)gateCheck(false)});
+  // the owner opening their own copy on claude.ai goes straight in
+  try{if(window.claude&&window.claude.use)window.claude.use('user').then(async u=>{if(GATE.on&&u&&await u.isOwner()===true)gateOpen()}).catch(()=>{})}catch(e){}
+  if(GATE.s&&GATE.s.id){gateShow('Checking your access',{dots:true});gateCheck(true)}else gateForm();
+}
+gateInit();
 /* ================= GRAPHICS TOOLKIT (procedural textures, geometry) ================= */
 const V3=(x=0,y=0,z=0)=>new THREE.Vector3(x,y,z);
 function ihash(x,y){let h=Math.imul(x|0,374761393)+Math.imul(y|0,668265263)|0;h=Math.imul(h^(h>>>13),1274126177);return((h^(h>>>16))>>>0)/4294967296}

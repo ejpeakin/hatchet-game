@@ -12,6 +12,27 @@ To play it on the web, turn on GitHub Pages for this repository (Settings → Pa
 
 The game picks a graphics setting to suit your computer and adjusts it as you play: it lowers the setting if the game is slow, and tries one step up if it stays smooth. To choose a setting yourself, press G to switch between Auto, High, Medium and Low. F3 shows the frame rate.
 
+### Invite-only access (email sign-up)
+
+The game can ask every new player for their email before it opens. Each request is emailed to you with Approve and Deny buttons, and as soon as you approve, the game opens for that player. Approval belongs to the browser that asked, so sharing the link (or typing someone else's email) doesn't let anyone else in.
+
+It runs on a small, free Google Apps Script in your own Google account. To set it up:
+
+1. Create a blank Google Sheet at [sheets.google.com](https://sheets.google.com) and name it something like "Hatchet access".
+2. In the sheet, open **Extensions → Apps Script**. Delete the code in the editor, paste in everything from [`access/Code.gs`](access/Code.gs), and click **Save**.
+3. Click **Deploy → New deployment**. Click the gear next to "Select type" and choose **Web app**. Set **Execute as** to **Me** and **Who has access** to **Anyone**, then click **Deploy**.
+4. Google asks you to authorize the script. Choose your account, then **Advanced → Go to (the project's name) (unsafe) → Allow**. Google shows that warning for any script it hasn't reviewed. This one only uses its own sheet and sends the request emails.
+5. Copy the **Web app URL** (it ends in `/exec`).
+6. In `index.html`, find `const ACCESS_URL='';`, paste the URL between the quotes and commit. From then on the website asks for an email before the game opens.
+
+Good to know:
+
+- If **Anyone** isn't offered in step 3 (school accounts sometimes block it), use a personal Google account.
+- Everyone who asks is a row in the **Requests** sheet. To take someone's access away, type `denied` in their Status cell, or delete their row.
+- If you change the script later, use **Deploy → Manage deployments → Edit → New version**, so the web address stays the same.
+- Until `ACCESS_URL` is filled in, the game opens for everyone as before.
+- This stops anyone who only has the link. Someone who knows how to edit web pages could still copy the game file and take the check out, because the whole game is in that public file.
+
 ### Modes
 
 - **Story:** the flight, the crash and the chapters of the book: water and food, shelter, fire, the bow, the moose, the storm, swimming down into the sunken plane for the med kit, and the signal. The game saves at each chapter.
