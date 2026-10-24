@@ -4378,25 +4378,28 @@ function splat(x,z,h,sl){
   const fl=(1-grass*.85)*(1-s);
   const w=[s,grass*(1-s),fl+cleared*.2,rock];const sum=w[0]+w[1]+w[2]+w[3]+1e-4;return w.map(v=>v/sum);
 }
+const TERR_LITE={value:0};   // 1 on the LOW setting: the ground reads far fewer textures
 function terrainMaterial(){
   const m=new THREE.MeshStandardMaterial({roughness:.97,metalness:0,vertexColors:true});m.extensions={derivatives:true};
   m.onBeforeCompile=sh=>{
-    sh.uniforms.uWet=WETU;sh.uniforms.tSand={value:TX.sand};sh.uniforms.tGrass={value:TX.grass};sh.uniforms.tFloor={value:TX.floor};sh.uniforms.tRock={value:TX.rock};
+    sh.uniforms.uWet=WETU;sh.uniforms.uLite=TERR_LITE;sh.uniforms.tSand={value:TX.sand};sh.uniforms.tGrass={value:TX.grass};sh.uniforms.tFloor={value:TX.floor};sh.uniforms.tRock={value:TX.rock};
     sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nattribute vec4 splat;varying vec4 vSplat;varying vec3 vWP;varying vec3 vNt;').replace('#include <begin_vertex>','#include <begin_vertex>\nvSplat=splat;vWP=(modelMatrix*vec4(position,1.)).xyz;vNt=normal;');
-    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nuniform float uWet;uniform sampler2D tSand,tGrass,tFloor,tRock;varying vec4 vSplat;varying vec3 vWP;varying vec3 vNt;\nfloat terrWet=0.;float terrH=0.;\nvec3 dec(vec4 c){return pow(c.rgb,vec3(2.2));}').replace('#include <map_fragment>',`
+    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nuniform float uWet,uLite;uniform sampler2D tSand,tGrass,tFloor,tRock;varying vec4 vSplat;varying vec3 vWP;varying vec3 vNt;\nfloat terrWet=0.;float terrH=0.;\nvec3 dec(vec4 c){return pow(c.rgb,vec3(2.2));}').replace('#include <map_fragment>',`
       vec2 a=vWP.xz*.21,b=vWP.xz*.034+vec2(.31,.17);
       float v2=.78+.44*texture2D(tGrass,b).g;
       vec3 sa=dec(texture2D(tSand,a))*v2;
       vec3 gr=dec(texture2D(tGrass,a))*v2;
       vec3 fl=dec(texture2D(tFloor,a*.9))*(1.6-v2*.8);
-      vec3 bwt=pow(abs(normalize(vNt)),vec3(4.));bwt/=bwt.x+bwt.y+bwt.z;
-      vec3 rk=(dec(texture2D(tRock,vWP.zy*.17))*bwt.x+dec(texture2D(tRock,a*.8))*bwt.y+dec(texture2D(tRock,vWP.xy*.17))*bwt.z)*(.75+.5*texture2D(tRock,b*2.1).g)*(.62+.76*(texture2D(tRock,vWP.zy*.011).g*bwt.x+texture2D(tRock,vWP.xz*.011).g*bwt.y+texture2D(tRock,vWP.xy*.011).g*bwt.z))*(.92+.16*sin(vWP.y*.9+texture2D(tRock,vWP.xz*.02).g*5.));
-      float ws=vSplat.x+vSplat.y+vSplat.z+vSplat.w+1e-4;
+      vec3 rk;
+      if(uLite>.5)rk=dec(texture2D(tRock,a*.8))*.95;   // LOW: one read per layer, five in all, instead of seventeen
+      else{vec3 bwt=pow(abs(normalize(vNt)),vec3(4.));bwt/=bwt.x+bwt.y+bwt.z;
+      rk=(dec(texture2D(tRock,vWP.zy*.17))*bwt.x+dec(texture2D(tRock,a*.8))*bwt.y+dec(texture2D(tRock,vWP.xy*.17))*bwt.z)*(.75+.5*texture2D(tRock,b*2.1).g)*(.62+.76*(texture2D(tRock,vWP.zy*.011).g*bwt.x+texture2D(tRock,vWP.xz*.011).g*bwt.y+texture2D(tRock,vWP.xy*.011).g*bwt.z))*(.92+.16*sin(vWP.y*.9+texture2D(tRock,vWP.xz*.02).g*5.));
       vec2 a2=vWP.xz*1.37;
-      gr*=.82+.36*texture2D(tGrass,a2*1.1).g;fl*=.8+.4*texture2D(tFloor,a2*1.3).g;
+      gr*=.82+.36*texture2D(tGrass,a2*1.1).g;fl*=.8+.4*texture2D(tFloor,a2*1.3).g;}
+      float ws=vSplat.x+vSplat.y+vSplat.z+vSplat.w+1e-4;
       terrWet=1.-smoothstep(-.15,.42,vWP.y);
       diffuseColor.rgb*=(sa*vSplat.x+gr*vSplat.y+fl*vSplat.z+rk*vSplat.w)/ws;
-      {float pud=smoothstep(.56,.68,texture2D(tFloor,vWP.xz*.045+7.).g*.6+texture2D(tGrass,vWP.xz*.011).g*.5)*uWet*smoothstep(.9,.985,normalize(vNt).y)*(1.-vSplat.w);terrWet=max(terrWet,pud*uWet*1.2);diffuseColor.rgb*=1.-.3*uWet-.35*pud;}
+      if(uWet>.001){float pud=smoothstep(.56,.68,texture2D(tFloor,vWP.xz*.045+7.).g*.6+texture2D(tGrass,vWP.xz*.011).g*.5)*uWet*smoothstep(.9,.985,normalize(vNt).y)*(1.-vSplat.w);terrWet=max(terrWet,pud*uWet*1.2);diffuseColor.rgb*=1.-.3*uWet-.35*pud;}
       diffuseColor.rgb*=1.-.38*terrWet;
       terrH=dot(diffuseColor.rgb,vec3(.3,.5,.2));`).replace('#include <roughnessmap_fragment>','#include <roughnessmap_fragment>\n      roughnessFactor=mix(roughnessFactor,.32,terrWet*.75);').replace('#include <normal_fragment_maps>',`#include <normal_fragment_maps>
       {float dh=(.045+.09*vSplat.w)*(1.-smoothstep(8.,40.,length(vViewPosition)));vec3 sX=dFdx(-vViewPosition),sY=dFdy(-vViewPosition);vec3 R1=cross(sY,normal),R2=cross(normal,sX);float fDet=dot(sX,R1)*faceDirection;
@@ -4413,9 +4416,9 @@ function buildTerrain(){
     const s=splat(x,z,h,sl);spl[k*4]=s[0];spl[k*4+1]=s[1];spl[k*4+2]=s[2];spl[k*4+3]=s[3];
     const v=.82+.3*fbm(x*.07,z*.07,3);const wet=h<.5&&h>-.3?.78:1;col[k*3]=v*wet;col[k*3+1]=v*wet;col[k*3+2]=v*wet}
   const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(pos,3));g.setAttribute('color',new THREE.BufferAttribute(col,3));g.setAttribute('splat',new THREE.BufferAttribute(spl,4));
-  // build normals once on a full index, then slice the mesh into 32-cell tiles so each can be frustum-culled and skipped in shadow and reflection passes
+  // build normals once on a full index, then slice the mesh into 56-cell tiles so each can be frustum-culled and skipped in shadow and reflection passes
   {const full=new Uint32Array((NX-1)*(NZ-1)*6);let q=0;for(let j=0;j<NZ-1;j++)for(let i=0;i<NX-1;i++){const a=j*NX+i,b=a+1,c=a+NX,d=c+1;full[q++]=a;full[q++]=c;full[q++]=b;full[q++]=b;full[q++]=c;full[q++]=d}g.setIndex(new THREE.BufferAttribute(full,1));g.computeVertexNormals();g.setIndex(null)}
-  const mat=terrainMaterial(),TS=32;WORLD.terrain=[];
+  const mat=terrainMaterial(),TS=56;WORLD.terrain=[];
   for(let j0=0;j0<NZ-1;j0+=TS)for(let i0=0;i0<NX-1;i0+=TS){const i1=Math.min(NX-1,i0+TS),j1=Math.min(NZ-1,j0+TS),idx=new Uint32Array((i1-i0)*(j1-j0)*6);let q=0,ymin=1e9,ymax=-1e9;
     for(let j=j0;j<j1;j++)for(let i=i0;i<i1;i++){const a=j*NX+i,b=a+1,c=a+NX,d=c+1;idx[q++]=a;idx[q++]=c;idx[q++]=b;idx[q++]=b;idx[q++]=c;idx[q++]=d;const h=HG[a];if(h<ymin)ymin=h;if(h>ymax)ymax=h}
     const cg=new THREE.BufferGeometry();for(const k in g.attributes)cg.setAttribute(k,g.attributes[k]);cg.setIndex(new THREE.BufferAttribute(idx,1));
@@ -5269,7 +5272,7 @@ function makeTornado(){
 /* ---- init ---- */
 function initGL(){
   try{
-    const ren=new THREE.WebGLRenderer({canvas:$('gl'),antialias:!LOWQ,powerPreference:'high-performance'});GL.userPR=LOWQ?1:2;if(!LOWQ)$('gl').style.filter='saturate(.92) contrast(1.05)';
+    const ren=new THREE.WebGLRenderer({canvas:$('gl'),antialias:!LOWQ&&!postLikely(),powerPreference:'high-performance'});   // post-processing smooths edges itself (FXAA), so multisampling would only cost timeGL.userPR=LOWQ?1:2;if(!LOWQ)$('gl').style.filter='saturate(.92) contrast(1.05)';
     ren.outputEncoding=THREE.sRGBEncoding;ren.toneMapping=THREE.ACESFilmicToneMapping;ren.toneMappingExposure=1.05;ren.shadowMap.enabled=true;ren.shadowMap.type=THREE.PCFShadowMap;ren.shadowMap.autoUpdate=false;ren.info.autoReset=false;GL.shadowStamp=-1e9;GL.shX=1e9;GL.shZ=1e9;GL.shL=new THREE.Vector3();
     GL.ren=ren;POST.on=postSupported(ren);if(POST.on){ren.toneMapping=THREE.NoToneMapping;$('vig').style.display='none';$('grain').style.display='none';$('gl').style.filter='none'}GL.scene=new THREE.Scene();GL.cam=new THREE.PerspectiveCamera(72,1,.1,1500);GL.cam.rotation.order='YXZ';GL.scene.add(GL.cam);
     GL.vmScene=new THREE.Scene();GL.vmCam=new THREE.PerspectiveCamera(58,1,.01,10);GL.vmCam.rotation.order='YXZ';
@@ -5434,6 +5437,11 @@ function weatherGameplay(dt){
 const POST={on:false,refl:true,ao:true,rays:true,bloom:true,w:0,h:0,ready:false,t:null,k:[]};
 const FS_VS='varying vec2 vUv;void main(){vUv=uv;gl_Position=vec4(position.xy,0.,1.);}';
 function fsMat(frag,uniforms,extra){return new THREE.ShaderMaterial(Object.assign({uniforms,vertexShader:FS_VS,fragmentShader:frag,depthTest:false,depthWrite:false},extra||{}))}
+/* asked before the renderer exists, to decide whether the page canvas needs multisampling */
+function postLikely(){
+  if(LOWQ)return false;
+  try{const c=document.createElement('canvas'),gl=c.getContext('webgl2');if(!gl)return false;const ok=!!(gl.getExtension('EXT_color_buffer_float')||gl.getExtension('EXT_color_buffer_half_float'));const l=gl.getExtension('WEBGL_lose_context');if(l)l.loseContext();return ok}catch(e){return false}
+}
 function postSupported(r){
   const caps=r.capabilities;if(!caps.isWebGL2||LOWQ)return false;
   try{r.extensions.get('EXT_color_buffer_float');r.extensions.get('EXT_color_buffer_half_float');return r.extensions.has('EXT_color_buffer_float')||r.extensions.has('EXT_color_buffer_half_float')}catch(e){return false}
@@ -5537,7 +5545,8 @@ function postRender(){
   const S_=POST.rtScene;
   reflRender();
   r.autoClear=true;r.setRenderTarget(S_);r.setClearColor(0x000000,1);r.render(GL.scene,cam);
-  const vmOn=!!GL.vmOn;r.autoClear=false;
+  let vmOn=!!GL.vmOn;r.autoClear=false;
+  if(vmOn&&!POST.ao&&!POST.rays){r.clearDepth();r.render(GL.vmScene,GL.vmCam);vmOn=false}   // the composite lays the hands over the scene first anyway: this skips a full-screen buffer
   if(vmOn){r.setRenderTarget(POST.rtVm);r.setClearColor(0x000000,0);r.clear(true,true,false);r.render(GL.vmScene,GL.vmCam);r.setClearColor(0x000000,1)}
   if(POST.ao){const a=u(m.ao);a.tDepth.value=S_.depthTexture;a.uProj.value.copy(cam.projectionMatrix);a.uProjInv.value.copy(cam.projectionMatrixInverse);a.uPx.value.set(2/w,2/h);postPass(m.ao,POST.rtAo);
     const b=u(m.blur);b.tDepth.value=S_.depthTexture;b.uNear.value=cam.near;b.uFar.value=cam.far;b.tAO.value=POST.rtAo.texture;b.uDir.value.set(2/w,0);postPass(m.blur,POST.rtAo2);b.tAO.value=POST.rtAo2.texture;b.uDir.value.set(0,2/h);postPass(m.blur,POST.rtAo)}
@@ -7748,9 +7757,9 @@ function saveSummary(sv){
 }
 /* ================= GRAPHICS QUALITY, FRAME COUNTER AND AUTO-TUNING ================= */
 const QUAL={
-  high:{pr:1.5,refl:true,ao:true,rays:true,bloom:true,shadow:2048,shInt:.12,near:54,nears:28,under:1,dens:1,label:'HIGH'},
-  medium:{pr:1,refl:false,ao:false,rays:false,bloom:true,shadow:2048,shInt:.2,near:44,nears:22,under:.78,dens:.8,label:'MEDIUM'},
-  low:{pr:.8,refl:false,ao:false,rays:false,bloom:false,shadow:1024,shInt:.34,near:34,nears:15,under:.55,dens:.5,label:'LOW'}
+  high:{pr:1.5,refl:true,ao:true,rays:true,bloom:true,shadow:2048,shInt:.12,near:54,nears:28,under:1,dens:1,aniso:8,lite:0,label:'HIGH'},
+  medium:{pr:1,refl:false,ao:false,rays:false,bloom:true,shadow:2048,shInt:.2,near:44,nears:22,under:.78,dens:.8,aniso:4,lite:0,label:'MEDIUM'},
+  low:{pr:.7,refl:false,ao:false,rays:false,bloom:false,shadow:1024,shInt:.5,near:30,nears:14,under:.5,dens:.45,aniso:2,lite:1,label:'LOW'}
 };
 const Q={mode:'auto',tier:'medium',fps:60,ms:16.7,worst:0,acc:0,n:0,w:0,wt:0,calls:0,tris:0,show:true,gov:0,govT:0,hold:3,pr:1,stable:0,gpu:'',ceil:2,good:0,tried:{}};
 const TIERS=['low','medium','high'];
@@ -7760,7 +7769,7 @@ function applyQuality(tier){
   GL.userPR=POST.on?q.pr:Math.min(q.pr,1);Q.pr=GL.userPR;
   POST.refl=q.refl&&POST.on;POST.ao=q.ao&&POST.on;POST.rays=q.rays&&POST.on;POST.bloom=q.bloom;
   const sh=GL.sun.shadow;if(sh.mapSize.x!==q.shadow){sh.mapSize.set(q.shadow,q.shadow);if(sh.map){sh.map.dispose();sh.map=null}}
-  Q.shInt=q.shInt;GL.shadowStamp=-1e9;if(WORLD.waterMats)for(const w of WORLD.waterMats)w.uniforms.uClouds.value=tier==='high'?1:0;
+  Q.shInt=q.shInt;GL.shadowStamp=-1e9;TERR_LITE.value=q.lite;qualTextures(q.aniso);qualCasters(tier==='low');if(WORLD.waterMats)for(const w of WORLD.waterMats)w.uniforms.uClouds.value=tier==='high'?1:0;
   VEG.NEAR2=q.near*q.near;VEG.NEARS2=q.nears*q.nears;VEG.px=1e9;
   for(const m of VEG.under){const u=m.userData;if(u.vis!==undefined)u.vr=VCH*.71+u.vis*q.under;if(u.thin)m.count=Math.max(1,Math.round(u.n*q.dens))}
   fit();Q.hold=3.5;Q.acc=0;Q.n=0;Q.stable=0;
@@ -7774,6 +7783,19 @@ function gpuGuess(){
   if(/nvidia|geforce|quadro|rtx|radeon\s*(rx|pro|r9|vii)|apple m\d|arc\s*a\d/i.test(r))return 'high';
   if(/swiftshader|llvmpipe|softpipe|software|basic render|mali|adreno|powervr|videocore|apple a\d|intel/i.test(r)&&!/iris/i.test(r))return 'low';
   return 'medium';
+}
+/* texture filtering: the ground is seen at a low angle, where anisotropic filtering does the most extra reads */
+let QTEX=null;
+function qualTextures(n){
+  if(!QTEX){QTEX=new Map();const add=t=>{if(t&&t.isTexture&&(t.isDataTexture||t.isCanvasTexture)&&t.anisotropy>1&&!QTEX.has(t))QTEX.set(t,t.anisotropy)};   // each texture with its own best setting
+    GL.scene.traverse(o=>{if(!o.material)return;for(const m of Array.isArray(o.material)?o.material:[o.material]){for(const k in m)add(m[k]);if(m.uniforms)for(const k in m.uniforms)add(m.uniforms[k].value)}})}
+  for(const [t,a0] of QTEX){const a=Math.min(a0,n);if(t.anisotropy!==a){t.anisotropy=a;t.needsUpdate=true}}
+}
+/* on LOW, small props stop casting shadows: dozens fewer draws each time the shadow map refreshes */
+let QCAST=null;
+function qualCasters(low){
+  if(!QCAST){QCAST=[];GL.scene.traverse(o=>{if(o.isMesh&&!o.isInstancedMesh&&!o.isSkinnedMesh&&o.castShadow&&o.geometry.attributes.position&&o.geometry.attributes.position.count<600)QCAST.push(o)})}
+  for(const o of QCAST)o.castShadow=!low;
 }
 function initQuality(){Q.guess=gpuGuess();applyQuality(Q.mode==='auto'?Q.guess:Q.mode)}
 function setGraphics(mode){
@@ -7801,7 +7823,7 @@ function qualityGov(raw){
   if(Q.govT>=2.2){const fps=Q.gov/Q.govT;Q.govT=0;Q.gov=0;
     if(fps<44){const t=Q.tier,i=TIERS.indexOf(t),trial=Q.tried[t]&&Q.good<0;Q.good=0;
       if(trial)applyQuality(TIERS[i-1]);   // the step up was too much: go back
-      else if(t==='high')applyQuality(fps<26?'low':'medium');else if(t==='medium')applyQuality('low');else if(fps<30&&GL.userPR>.55){GL.userPR=Math.max(.55,GL.userPR-.1);Q.pr=GL.userPR;fit();Q.hold=2}
+      else if(t==='high')applyQuality(fps<26?'low':'medium');else if(t==='medium')applyQuality('low');else if(fps<30&&GL.userPR>.5){GL.userPR=Math.max(.5,GL.userPR-.1);Q.pr=GL.userPR;fit();Q.hold=2}
       Q.ceil=Math.min(Q.ceil,TIERS.indexOf(Q.tier));   // never climb back to a setting that was too slow
       if(Q.tier!==t&&scene==='play'&&!trial)toast('Graphics lowered to '+QUAL[Q.tier].label+' to keep the game smooth. Press G to change.',3.4)}
     else if(fps>=56){Q.good=Math.max(0,Q.good)+1;const i=TIERS.indexOf(Q.tier);
