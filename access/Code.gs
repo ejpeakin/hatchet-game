@@ -15,14 +15,15 @@ const COL = { time: 1, email: 2, name: 3, status: 4, id: 5, key: 6, token: 7 };
 
 function doGet(e) {
   const p = (e && e.parameter) || {};
+  const out = o => json_(o, p.callback);
   try {
-    if (p.action === 'request') return json_(request_(p));
-    if (p.action === 'status') return json_(status_(p));
+    if (p.action === 'request') return out(request_(p));
+    if (p.action === 'status') return out(status_(p));
     if (p.action === 'approve' || p.action === 'deny') return decide_(p);
     return page_('Hatchet access is running', 'The game uses this address to send requests. Requests are listed in your Requests sheet.');
   } catch (err) {
     console.error(err);
-    return json_({ ok: false, error: 'server' });
+    return out({ ok: false, error: 'server', detail: String(err && err.message || err).slice(0, 160) });
   }
 }
 
@@ -135,7 +136,11 @@ function underLimit_() {
 }
 function safe_(v) { return /^[=+\-@]/.test(v) ? "'" + v : v; }   // keep the sheet from reading a typed name as a formula
 function esc_(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]); }
-function json_(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
+/* JSON, or JSONP when the game asks for a callback (its backup when a browser will not hand back the plain answer) */
+function json_(o, callback) {
+  if (callback && /^[A-Za-z_$][\w$]{0,40}$/.test(callback)) return ContentService.createTextOutput(callback + '(' + JSON.stringify(o) + ');').setMimeType(ContentService.MimeType.JAVASCRIPT);
+  return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON);
+}
 function page_(title, text, extra) {
   const html = '<!doctype html><meta charset="utf-8"><style>body{font:16px/1.5 system-ui,sans-serif;max-width:480px;margin:40px auto;padding:0 16px;color:#222}' +
     'h1{font-size:22px}button{font:600 16px system-ui,sans-serif;padding:10px 18px;border:0;border-radius:6px;background:#e8863a;color:#1a0f06;cursor:pointer}</style>' +

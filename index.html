@@ -3895,9 +3895,20 @@ const GATE_KEY='hatchet.access';
 function gateLoad(){try{const s=JSON.parse(localStorage.getItem(GATE_KEY)||'null');if(s&&/^[0-9a-f]{32}$/.test(s.key))return s}catch(e){}return null}
 function gateSave(){try{localStorage.setItem(GATE_KEY,JSON.stringify(GATE.s))}catch(e){}}
 function gateNewKey(){const a=new Uint8Array(16);crypto.getRandomValues(a);return Array.from(a,b=>b.toString(16).padStart(2,'0')).join('')}
+const gateUrl=params=>ACCESS_URL+(ACCESS_URL.includes('?')?'&':'?')+new URLSearchParams({...params,_:Date.now()});
+/* a plain GET first; if the browser will not hand back the answer, the same request again as a script tag (JSONP) */
 async function gateCall(params){
-  const r=await fetch(ACCESS_URL+(ACCESS_URL.includes('?')?'&':'?')+new URLSearchParams({...params,_:Date.now()}));   // a plain GET: no preflight, and Apps Script answers it from any site
-  if(!r.ok)throw new Error('HTTP '+r.status);const j=await r.json();if(!j||!j.ok)throw Object.assign(new Error(j&&j.error||'refused'),{server:true,code:j&&j.error});return j;
+  let j;
+  try{const r=await fetch(gateUrl(params));if(!r.ok)throw new Error('HTTP '+r.status);j=await r.json()}
+  catch(e){j=await gateJsonp(params)}
+  if(!j||!j.ok)throw Object.assign(new Error(j&&j.error||'refused'),{server:true,code:j&&j.error,detail:j&&j.detail});return j;
+}
+let gateCb=0;
+function gateJsonp(params){
+  return new Promise((res,rej)=>{const cb='__hatchetGate'+(++gateCb),sc=document.createElement('script');let done=false;
+    const end=(ok,v)=>{if(done)return;done=true;clearTimeout(to);try{delete window[cb]}catch(e){window[cb]=undefined}sc.remove();ok?res(v):rej(Object.assign(new Error('unreachable'),{net:true}))};
+    window[cb]=v=>end(true,v);sc.onerror=()=>end(false);const to=setTimeout(()=>end(false),15000);
+    sc.src=gateUrl({...params,callback:cb});document.head.appendChild(sc)});
 }
 /* one function draws every state of the screen: what it says, whether the form shows, and the button under it */
 function gateShow(msg,{form=false,note='',bad=false,alt='',dots=false}={}){
@@ -3940,7 +3951,7 @@ async function gateRequest(ev){
   GATE.busy=true;$('gateGo').disabled=true;$('gateNote').textContent='Sending…';$('gateNote').classList.remove('bad');
   try{const j=await gateCall({action:'request',email,name,key:s.key});s.id=j.id;s.status=j.status||'pending';gateSave();GATE.busy=false;if(s.status==='approved')gateOpen();else gatePending()}
   catch(e){GATE.busy=false;$('gateGo').disabled=false;
-    gateForm(e.code==='busy'?'Lots of people are asking right now. Please try again in a little while.':e.code==='email'?'That email address does not look right.':'Could not send your request. Check your internet connection and try again.',true)}
+    gateForm(e.code==='busy'?'Lots of people are asking right now. Please try again in a little while.':e.code==='email'?'That email address does not look right.':e.server?'The sign-up server had a problem ('+(e.detail||e.code||'unknown')+'). Please tell the game\u2019s owner.':'Could not reach the sign-up server. Check your internet connection and try again.',true)}
 }
 function gateAlt(){
   const a=GATE.alt;
@@ -3950,10 +3961,10 @@ function gateAlt(){
 }
 function gateInit(){
   if(!ACCESS_URL)return;
+  // the copy on claude.ai is private already (only people the owner shares it with can open it), and pages there cannot reach outside servers
+  if(window.claude||/(^|\.)claude(usercontent)?\.(ai|com)$/.test(location.hostname))return;
   GATE.on=true;GATE.s=gateLoad();$('gateF').addEventListener('submit',gateRequest);$('gateAlt').addEventListener('click',gateAlt);
   addEventListener('focus',()=>{if(GATE.on&&GATE.poll)gateCheck(false)});
-  // the owner opening their own copy on claude.ai goes straight in
-  try{if(window.claude&&window.claude.use)window.claude.use('user').then(async u=>{if(GATE.on&&u&&await u.isOwner()===true)gateOpen()}).catch(()=>{})}catch(e){}
   if(GATE.s&&GATE.s.id){gateShow('Checking your access',{dots:true});gateCheck(true)}else gateForm();
 }
 gateInit();
