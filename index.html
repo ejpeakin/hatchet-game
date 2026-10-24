@@ -33,6 +33,24 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);overflow:hi
 @media (hover:none) and (pointer:coarse){#pausebtn{display:block;right:auto;left:calc(50% + 34px)}#touch{display:flex}#snd{left:50%;right:auto;transform:translateX(-50%);bottom:calc(10px + env(safe-area-inset-bottom,0px))}}
 @media (orientation:portrait) and (max-width:700px){#rotate{display:block}}
 @media (prefers-reduced-motion:reduce){#grain{animation:none}}
+/* invite-only access screen (see the INVITE-ONLY ACCESS section of the script) */
+#gate{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;background:rgba(4,7,6,.78);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);touch-action:auto;overflow-y:auto}
+#gate[hidden]{display:none}
+#gate .card{width:100%;max-width:400px;box-sizing:border-box;padding:28px 24px 22px;border-radius:14px;background:rgba(14,19,16,.94);border:1px solid rgba(236,230,210,.16);box-shadow:0 18px 60px rgba(0,0,0,.5);text-align:center}
+#gate h1{margin:0;font:400 44px/1 'Alfa Slab One',Georgia,serif;letter-spacing:.04em;color:#e8c89a}
+#gate .sub{margin:12px 0 18px;font:italic 400 16px/1.45 'Lora',Georgia,serif;color:rgba(236,230,210,.82)}
+#gate label{display:block;text-align:left;margin:0 0 4px;font:600 13px/1.2 'Barlow Condensed',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:rgba(236,230,210,.62)}
+#gate input{display:block;width:100%;box-sizing:border-box;margin:0 0 14px;padding:11px 12px;border-radius:8px;border:1px solid rgba(236,230,210,.22);background:rgba(0,0,0,.35);color:var(--ink);font:500 18px/1.2 'Barlow Condensed',sans-serif;-webkit-user-select:text;user-select:text}
+#gate input:focus{outline:2px solid var(--ember);outline-offset:1px;border-color:transparent}
+#gate button{font:700 17px/1 'Barlow Condensed',sans-serif;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;border-radius:8px}
+#gate .go{width:100%;padding:13px 12px;border:0;background:var(--ember);color:#1a0f06}
+#gate .go:disabled{opacity:.55;cursor:default}
+#gate .alt{margin-top:12px;padding:8px 10px;border:1px solid rgba(236,230,210,.22);background:transparent;color:var(--ink);font-size:14px}
+#gate button:focus-visible{outline:2px solid var(--ember);outline-offset:2px}
+#gate .note{min-height:1.4em;margin:12px 0 0;font:500 16px/1.4 'Barlow Condensed',sans-serif;color:rgba(236,230,210,.75)}
+#gate .note.bad{color:#f0a07a}
+#gate .dots::after{content:'';animation:gdots 1.4s steps(4) infinite}
+@keyframes gdots{0%{content:''}25%{content:'.'}50%{content:'..'}75%{content:'...'}}
 </style>
 <div id="app"><div id="stage">
   <canvas id="gl" aria-label="First-person game view"></canvas>
@@ -43,6 +61,19 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);overflow:hi
 <button id="snd" aria-label="Toggle sound">♪</button>
 <button id="pausebtn" data-k="pause" aria-label="Pause">❚❚</button>
 <div id="rotate">Turn your phone sideways for the full view</div>
+<div id="gate" hidden role="dialog" aria-modal="true" aria-labelledby="gateT" aria-describedby="gateMsg">
+  <form class="card" id="gateF" novalidate>
+    <h1 id="gateT">HATCHET</h1>
+    <p class="sub" id="gateMsg">Checking your access<span class="dots"></span></p>
+    <div id="gateIn" hidden>
+      <label for="gateName">First name</label><input id="gateName" name="name" autocomplete="given-name" maxlength="60" placeholder="So the owner knows who you are">
+      <label for="gateEmail">Email</label><input id="gateEmail" name="email" type="email" autocomplete="email" inputmode="email" maxlength="120" required placeholder="you@example.com">
+      <button class="go" id="gateGo" type="submit">Ask to play</button>
+    </div>
+    <p class="note" id="gateNote" role="status" aria-live="polite"></p>
+    <button class="alt" id="gateAlt" type="button" hidden></button>
+  </form>
+</div>
 <div id="touch">
   <div id="joy" aria-label="Move"><i></i></div>
   <div class="r"><button data-k="throw" aria-label="Swing hatchet (hold to throw)">Axe</button><button data-k="jump" aria-label="Jump">Jump</button><button data-k="dodge" aria-label="Dodge">Dodge</button><button data-k="act" aria-label="Use">Use</button><button data-k="swap" aria-label="Switch between hatchet and bow">Swap</button></div>
@@ -3715,7 +3746,8 @@ const keysDown=new Set(),vk={};let hit={},rel={};const mouse={x:0,y:0},look={dx:
 const MAP={ArrowUp:'fwd',KeyW:'fwd',ArrowDown:'back',KeyS:'back',KeyA:'left',KeyD:'right',ArrowLeft:'lookL',ArrowRight:'lookR',Space:'jump',ShiftLeft:'run',ShiftRight:'run',KeyE:'act',Enter:'act',KeyF:'throw',KeyQ:'dodge',KeyC:'dodge',KeyM:'mute',KeyJ:'journal',Tab:'journal',Escape:'pause',KeyP:'pause',KeyN:'newg',F3:'fps',KeyG:'gfx',Digit1:'w1',Digit2:'w2',KeyX:'swap'};
 const REV={};for(const c in MAP)(REV[MAP[c]]=REV[MAP[c]]||[]).push(c);
 const isDown=a=>(vk[a]>0)||(REV[a]||[]).some(c=>keysDown.has(c));
-addEventListener('keydown',e=>{const a=MAP[e.code];if(!a)return;e.preventDefault();if(!e.repeat&&!isDown(a))hit[a]=true;keysDown.add(e.code);Snd.init();if(a==='mute'&&!e.repeat)Snd.toggle()});
+addEventListener('keydown',e=>{if(GATE.on)return;const a=MAP[e.code];if(!a)return;e.preventDefault();   // nothing reaches the game while the access screen is up
+if(!e.repeat&&!isDown(a))hit[a]=true;keysDown.add(e.code);Snd.init();if(a==='mute'&&!e.repeat)Snd.toggle()});
 addEventListener('keyup',e=>{const a=MAP[e.code];if(!a)return;keysDown.delete(e.code);if(!isDown(a))rel[a]=true});
 addEventListener('blur',()=>{keysDown.clear();for(const k in vk)vk[k]=0});
 document.querySelectorAll('[data-k]').forEach(b=>{const a=b.dataset.k;
@@ -3756,7 +3788,7 @@ const Snd={c:null,m:null,on:true,nb:null,amb:{},
     if(this.c){if(this.c.state==='suspended')this.c.resume();return}
     try{
       const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;
-      const c=this.c=new AC(),m=this.m=c.createGain();m.gain.value=this.on?.7:0;m.connect(c.destination);
+      const c=this.c=new AC(),m=this.m=c.createGain();m.gain.value=this.on?.7:0;const lp=this.lp=c.createBiquadFilter();lp.type='lowpass';lp.frequency.value=22000;m.connect(lp);lp.connect(c.destination);
       const len=c.sampleRate*2,b=c.createBuffer(1,len,c.sampleRate),d=b.getChannelData(0);for(let i=0;i<len;i++)d[i]=Math.random()*2-1;this.nb=b;
       const loop=(f,type,q)=>{const s=c.createBufferSource();s.buffer=b;s.loop=true;const fl=c.createBiquadFilter();fl.type=type;fl.frequency.value=f;fl.Q.value=q;const g=c.createGain();g.gain.value=0;s.connect(fl);fl.connect(g);g.connect(m);s.start();return{g,fl}};
       this.amb.wind=loop(480,'bandpass',.5);this.amb.water=loop(620,'lowpass',.4);this.amb.rain=loop(3400,'highpass',.3);this.amb.fire=loop(1800,'bandpass',.8);
@@ -3840,6 +3872,82 @@ function resetSeq(){runTok++;DLG.q.length=0;DLG.cur=null;DLG.auto=false;if(typeo
 const SKY=[[0,[6,10,22],[12,20,40],[26,34,56]],[5,[16,24,48],[70,64,96],[196,120,100]],[6.5,[58,100,156],[170,170,190],[250,190,130]],[9,[46,110,180],[130,178,214],[214,230,236]],[13,[34,100,178],[120,174,220],[208,228,240]],[17,[50,110,170],[160,190,210],[246,222,170]],[19,[44,58,110],[190,100,110],[250,160,80]],[20.5,[18,24,56],[70,56,100],[160,90,90]],[22,[8,12,26],[14,22,44],[28,36,58]],[24,[6,10,22],[12,20,40],[26,34,56]]];
 const SKYC={top:[40,100,170],mid:[120,170,210],hor:[200,225,235]};
 const nightF=t=>t<12?1-sstep(5,7,t):sstep(19,21,t);
+/* ================= INVITE-ONLY ACCESS =================
+   With ACCESS_URL set (the web-app address of the owner's Google Apps Script: access/Code.gs, set up as the
+   README describes), a new player has to ask for access with their email before the game opens. The script
+   emails the owner each request with Approve and Deny buttons and keeps the list in a Google Sheet; the moment
+   the owner approves, this screen opens the game. Approval belongs to the browser that asked (a random key kept
+   on this device), so passing the link on, or typing someone else's email, lets nobody else in. The game keeps
+   loading behind the screen, and no key or click reaches it until access is granted. An empty ACCESS_URL turns
+   the screen off. */
+const ACCESS_URL='https://script.google.com/macros/s/AKfycbxJ8e_Xw-SMzrZC3VngnBmTZ8A5prek59FYY_de-Nx9ZEaFNFh1vzgtIzcALivMCmWpOA/exec';
+const GATE={on:false,s:null,poll:null,pollUntil:0,busy:false};
+const GATE_KEY='hatchet.access';
+function gateLoad(){try{const s=JSON.parse(localStorage.getItem(GATE_KEY)||'null');if(s&&/^[0-9a-f]{32}$/.test(s.key))return s}catch(e){}return null}
+function gateSave(){try{localStorage.setItem(GATE_KEY,JSON.stringify(GATE.s))}catch(e){}}
+function gateNewKey(){const a=new Uint8Array(16);crypto.getRandomValues(a);return Array.from(a,b=>b.toString(16).padStart(2,'0')).join('')}
+async function gateCall(params){
+  const r=await fetch(ACCESS_URL+(ACCESS_URL.includes('?')?'&':'?')+new URLSearchParams({...params,_:Date.now()}));   // a plain GET: no preflight, and Apps Script answers it from any site
+  if(!r.ok)throw new Error('HTTP '+r.status);const j=await r.json();if(!j||!j.ok)throw Object.assign(new Error(j&&j.error||'refused'),{server:true,code:j&&j.error});return j;
+}
+/* one function draws every state of the screen: what it says, whether the form shows, and the button under it */
+function gateShow(msg,{form=false,note='',bad=false,alt='',dots=false}={}){
+  $('gate').hidden=false;$('gateMsg').textContent=msg;if(dots){const d=document.createElement('span');d.className='dots';$('gateMsg').append(d)}
+  $('gateIn').hidden=!form;const n=$('gateNote');n.textContent=note;n.classList.toggle('bad',bad);
+  const b=$('gateAlt');b.hidden=!alt;b.textContent=alt;
+  if(form){const s=GATE.s||{};if(s.email&&!$('gateEmail').value)$('gateEmail').value=s.email;if(s.name&&!$('gateName').value)$('gateName').value=s.name;$('gateGo').disabled=false;setTimeout(()=>{try{$(s.email?'gateGo':'gateEmail').focus()}catch(e){}},50)}
+}
+function gateOpen(){
+  GATE.on=false;gateStopPoll();$('gate').hidden=true;if(GATE.s){GATE.s.status='approved';gateSave()}
+  try{cv.focus()}catch(e){}
+}
+function gateForm(note='',bad=false){GATE.alt=null;gateShow('This game is invite-only. Ask the owner to let you in: once they approve, the game opens right here.',{form:true,note,bad})}
+function gatePending(){
+  GATE.alt='change';
+  gateShow('Request sent! Waiting for the owner to approve you.',{note:'The game opens here by itself once you are approved, and you will get an email too. You can close this page and come back later.',alt:'Use a different email',dots:true});
+  gateStartPoll();
+}
+function gateStartPoll(){gateStopPoll();GATE.pollUntil=Date.now()+30*60e3;GATE.poll=setInterval(()=>{if(document.hidden)return;if(Date.now()>GATE.pollUntil){gateStopPoll();GATE.alt='check';gateShow('Still waiting for the owner to approve you.',{note:'Come back later, or check now.',alt:'Check again'});return}gateCheck(false)},20e3)}
+function gateStopPoll(){if(GATE.poll){clearInterval(GATE.poll);GATE.poll=null}}
+/* ask the script where this browser's request stands */
+async function gateCheck(first){
+  const s=GATE.s;if(!s||!s.id){gateForm();return}
+  if(GATE.busy)return;GATE.busy=true;
+  try{const j=await gateCall({action:'status',id:s.id,key:s.key});
+    if(j.status==='approved')gateOpen();
+    else if(j.status==='pending'){s.status='pending';gateSave();if(first||GATE.alt!=='change')gatePending()}
+    else if(j.status==='denied'){s.status='denied';gateSave();gateStopPoll();GATE.alt='again';gateShow('Your request was not approved.',{note:'If you think that is a mistake, ask the owner, then send a new request.',alt:'Ask again'})}
+    else{GATE.s={key:s.key,email:s.email,name:s.name};gateSave();gateForm(s.status==='approved'?'Your access was removed. You can ask again.':'')}}   // the owner removed the request
+  catch(e){
+    if(s.status==='approved'){gateOpen();return}   // no connection or a server hiccup: someone already approved still gets to play
+    if(first){GATE.alt='retry';gateShow('Could not reach the sign-up server.',{note:'Check your internet connection, then try again.',bad:true,alt:'Try again'})}}
+  finally{GATE.busy=false}
+}
+async function gateRequest(ev){
+  ev.preventDefault();if(GATE.busy)return;
+  const email=$('gateEmail').value.trim(),name=$('gateName').value.trim();
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)){$('gateNote').textContent='Please enter a full email address, like name@example.com.';$('gateNote').classList.add('bad');$('gateEmail').focus();return}
+  const s=GATE.s=GATE.s||{key:gateNewKey()};s.email=email;s.name=name;gateSave();
+  GATE.busy=true;$('gateGo').disabled=true;$('gateNote').textContent='Sending…';$('gateNote').classList.remove('bad');
+  try{const j=await gateCall({action:'request',email,name,key:s.key});s.id=j.id;s.status=j.status||'pending';gateSave();GATE.busy=false;if(s.status==='approved')gateOpen();else gatePending()}
+  catch(e){GATE.busy=false;$('gateGo').disabled=false;
+    gateForm(e.code==='busy'?'Lots of people are asking right now. Please try again in a little while.':e.code==='email'?'That email address does not look right.':'Could not send your request. Check your internet connection and try again.',true)}
+}
+function gateAlt(){
+  const a=GATE.alt;
+  if(a==='change'){gateStopPoll();GATE.s={key:gateNewKey(),name:GATE.s&&GATE.s.name};gateSave();$('gateEmail').value='';gateForm()}
+  else if(a==='again'){GATE.s={key:GATE.s.key,email:GATE.s.email,name:GATE.s.name};gateSave();gateForm()}
+  else{gateShow('Checking your access',{dots:true});gateCheck(true).then(()=>{if(GATE.on&&GATE.s&&GATE.s.status==='pending'&&!GATE.poll)gateStartPoll()})}
+}
+function gateInit(){
+  if(!ACCESS_URL)return;
+  GATE.on=true;GATE.s=gateLoad();$('gateF').addEventListener('submit',gateRequest);$('gateAlt').addEventListener('click',gateAlt);
+  addEventListener('focus',()=>{if(GATE.on&&GATE.poll)gateCheck(false)});
+  // the owner opening their own copy on claude.ai goes straight in
+  try{if(window.claude&&window.claude.use)window.claude.use('user').then(async u=>{if(GATE.on&&u&&await u.isOwner()===true)gateOpen()}).catch(()=>{})}catch(e){}
+  if(GATE.s&&GATE.s.id){gateShow('Checking your access',{dots:true});gateCheck(true)}else gateForm();
+}
+gateInit();
 /* ================= GRAPHICS TOOLKIT (procedural textures, geometry) ================= */
 const V3=(x=0,y=0,z=0)=>new THREE.Vector3(x,y,z);
 function ihash(x,y){let h=Math.imul(x|0,374761393)+Math.imul(y|0,668265263)|0;h=Math.imul(h^(h>>>13),1274126177);return((h^(h>>>16))>>>0)/4294967296}
@@ -4039,6 +4147,14 @@ function makeWaterMaterial(skyU,opts={}){
     void main(){
       if(vDepth<0.)discard;
       vec3 V=normalize(cameraPosition-vW);vec3 n=wnorm(vW.xz);
+      if(cameraPosition.y<vW.y-.01){   // seen from under the surface: a bright, rippling window overhead, the dark water mirrored beyond it
+        vec3 U=-V;vec2 wob=n.xz*2.2;float up=clamp(U.y+wob.x*.15,0.,1.),win=smoothstep(.6,.74,up);
+        vec3 sky=skyCol(normalize(vec3(U.x*.55+wob.x,1.,U.z*.55+wob.y)),uClouds>.5)*1.15;
+        float glint=pow(max(dot(normalize(vec3(U.x+wob.x*.6,U.y,U.z+wob.y*.6)),sunDir),0.),24.)*1.6;
+        float sh=.75+.5*vn(vW.xz*1.7+uTime*.4)+.35*pow(vn(vW.xz*4.3-uTime*.7),3.);
+        vec3 c=mix(fogColor*(1.3+.6*sh),sky*sh+sunCol*glint,win);
+        float dist=length(vW-cameraPosition);c=mix(c,fogColor,1.-exp(-fogDensity*fogDensity*dist*dist*16.));
+        gl_FragColor=linearToOutputTexel(vec4(c,.97));return;}
       float fres=pow(1.-max(dot(n,V),0.),4.5)*.92+.035;
       vec3 R=reflect(-V,n);R.y=abs(R.y);
       vec3 refl=uReflOn>.5?vec3(0.):skyCol(R,uClouds>.5);
@@ -4206,6 +4322,7 @@ function makeCliff(seed,w,h){
 /* ================= WORLD LAYOUT + TERRAIN ================= */
 const WB={x0:-330,x1:480,z0:-330,z1:340},CELL=2.5,AREA={x0:-290,x1:440,z0:-290,z1:305};
 const LAKE={cx:20,cz:-100,rx:150,rz:96};
+const CH_STARTS=[[98,26],[236,112],[256,122],[162-8,93-8],[162-1,93.5],[162,89.5],[153,88],[36,-5]];   // chapter start points that are not already KEY spots
 const POND={x:262,z:92,r:17};
 const KEY={spawn:[0,4],dive:[36,-9],wreck:[42,-50],cherry:[73,12],bark:[[83,22],[98,30]],rasp:[[109,18],[197,60]],dead:[[129,40],[141,55],[171,72]],stump:[[122,25],[182,48],[190,70]],pit:[150,86],strike:[151,91],shelter:[162,93],cliff:[166,105],eggs:[262,121],snag:[[278,58],[288,66],[284,80]],signal:[292,70],floatplane:[46,-30]};
 const streamX=z=>214+5*Math.sin(z/22);
@@ -4215,14 +4332,16 @@ const PONDY=landBase(POND.x,POND.z)-.1;
 function streamY(z){return landBase(streamX(z),z)-.5}
 /* the bush plane comes in from the north-east along one straight line; a low pass in the ring of mountains lets it through */
 const FL_DIR=[.6998,.7144],FL_GO=[314,196];
+/* where the storm leaves the plane: nose-down in a hollow of the lake bed, tail out of the water */
+const SUNK={x:38,z:-47,yaw:Math.PI/2+.5,pitch:-.42,y:-3.35};SUNK.nx=SUNK.x+Math.cos(SUNK.yaw)*2.4;SUNK.nz=SUNK.z-Math.sin(SUNK.yaw)*2.4;
 function flPass(x,z){const dx=x-LAKE.cx,dz=z-LAKE.cz,along=dx*FL_DIR[0]+dz*FL_DIR[1],off=dx*FL_DIR[1]-dz*FL_DIR[0];return Math.exp(-(off/46)*(off/46))*sstep(400,470,along)}
 function rawH(x,z){
   let h=landBase(x,z);
   const dx=(x-LAKE.cx)/LAKE.rx,dz=(z-LAKE.cz)/LAKE.rz,t=Math.hypot(dx,dz);
-  if(t<1)h=.18-6.5*Math.pow(1-t,.85);else if(t<1.3){const k=sstep(1,1.3,t);h=lerp(.18,h,k)}
+  if(t<1)h=.18-6.5*Math.pow(1-t,.85)-2.3*gauss(x,z,SUNK.nx,SUNK.nz,7,7)-7.5*Math.pow(sstep(.62,.05,t),1.4);else if(t<1.3){const k=sstep(1,1.3,t);h=lerp(.18,h,k)}   // deep middle past the wreck's ledge; a sloping shore up to the forest
   h+=7*gauss(x,z,166,118,26,12)+20*gauss(x,z,303,92,36,52)+5*gauss(x,z,322,40,25,25);
   const cf=gauss(x,z,155,90,15,11);h=lerp(h,landBase(155,90)+.3,cf*.8); // camp flat
-  const d=Math.abs(x-streamX(z)),sw=sstep(5,25,z)*(1-sstep(190,215,z));h-=1.25*Math.exp(-(d/2.5)*(d/2.5))*sw;
+  const d=Math.abs(x-streamX(z)),sw=sstep(5,25,z)*(1-sstep(190,215,z));h-=2.05*Math.exp(-(d/2.6)*(d/2.6))*sw;
   const dp=Math.hypot(x-POND.x,z-POND.z)/POND.r;if(dp<1.7)h=lerp(PONDY-1.7,h,sstep(.5,1.7,dp));
   for(const p of POIS){if(p.hill)h+=p.hill*gauss(x,z,p.x,p.z,26,26);const g2=gauss(x,z,p.x,p.z,9,9);if(g2>.004)h=lerp(h,landBase(p.x,p.z)+(p.hill||0)*.92,g2*.75)}
   // the map is ringed by mountains too steep to climb, so the edge of the world is a wall of rock rather than an invisible barrier
@@ -4245,7 +4364,7 @@ function waterDepthAt(x,z){ // positive = under water, for gameplay (wading/bloc
 /* ================= SCENE OBJECTS ================= */
 const WORLD={trees:[],cols:new Map(),sky:null,sun:null,moon:null,hemi:null,water:[],fires:[],shelter:null,wreck:null,floatplane:null,snags:[],deadfalls:[],stumps:[],bushes:{},ready:false,rockCols:[]};
 const CC=6;const ckey=(ix,iz)=>ix*4096+iz;
-function addCol(x,z,r){const ix=Math.floor(x/CC),iz=Math.floor(z/CC),k=ckey(ix,iz);let a=WORLD.cols.get(k);if(!a)WORLD.cols.set(k,a=[]);a.push({x,z,r})}
+function addCol(x,z,r){const ix=Math.floor(x/CC),iz=Math.floor(z/CC),k=ckey(ix,iz);let a=WORLD.cols.get(k);if(!a)WORLD.cols.set(k,a=[]);const c={x,z,r};a.push(c);return c}
 function colliders(x,z){const out=[],ix=Math.floor(x/CC),iz=Math.floor(z/CC);for(let a=-1;a<=1;a++)for(let b=-1;b<=1;b++){const l=WORLD.cols.get(ckey(ix+a,iz+b));if(l)for(const c of l)out.push(c)}return out}
 const LM={sand:null};
 function splat(x,z,h,sl){
@@ -4476,13 +4595,14 @@ function makePlane(o={}){
   g.traverse(m=>{if(m.isMesh)m.castShadow=true});return g;
 }
 function buildPlanes(){
-  const w=makePlane();WORLD.wreck=w;GL.scene.add(w);
+  const w=makePlane();WORLD.wreck=w;GL.scene.add(w);buildWreckCabin();
   const fp=makePlane({floats:true});fp.visible=false;GL.scene.add(fp);WORLD.floatplane=fp;
 }
 function updateWreck(dt){
   const w=WORLD.wreck;if(!w)return;const bob=Math.sin(T*1.1)*.03;
   if(!S.planeUp){w.position.set(KEY.wreck[0],-1.3+bob,KEY.wreck[1]);w.rotation.set(0,.7,-1.3+Math.sin(T*.5)*.01,'YZX')} // tail up, nose below the surface
-  else{w.position.set(KEY.wreck[0]-6,-.72+bob,KEY.wreck[1]+8);w.rotation.set(Math.sin(T*.6)*.015,2.2,-.06,'YZX')}
+  else{w.position.set(SUNK.x,SUNK.y,SUNK.z);w.rotation.set(Math.sin(T*.37)*.004,SUNK.yaw,SUNK.pitch,'YZX')}
+  wreckCabUpdate();
   w.userData.prop.rotation.x=0;
   const f=WORLD.floatplane;f.visible=!!S.fl.floatplane;if(f.visible){const fp=S.fl.floatplane;f.position.set(fp.x,1.14+Math.sin(T*1.2)*.03,fp.z);f.rotation.set(0,fp.ry,Math.sin(T*.9)*.01,'YZX');f.userData.prop.rotation.x=T*30}
 }
@@ -5001,8 +5121,8 @@ function buildTreeAssets(){
 function lodUpdate(x,z,force){
   if(!VEG.ready)return;const dx=x-VEG.px,dz=z-VEG.pz;if(!force&&dx*dx+dz*dz<36)return;VEG.px=x;VEG.pz=z;
   for(const k in VEG.near)for(const e of VEG.near[k])e.n=0;for(const k in VEG.far)VEG.far[k].n=0;
-  for(const t of VEG.items){const d2=(t.x-x)*(t.x-x)+(t.z-z)*(t.z-z);
-    if(d2<(t.s>.55?VEG.NEAR2:VEG.NEARS2)){const e=VEG.near[t.kind][t.v];if(e.n<e.cap){e.f.setMatrixAt(e.n,t.m);e.t.setMatrixAt(e.n,t.m);e.f.setColorAt(e.n,t.c);e.t.setColorAt(e.n,t.c);e.n++}}
+  for(const t of VEG.items){t.slot=null;if(t.cut)continue;const d2=(t.x-x)*(t.x-x)+(t.z-z)*(t.z-z);
+    if(d2<(t.s>.55?VEG.NEAR2:VEG.NEARS2)){const e=VEG.near[t.kind][t.v];if(e.n<e.cap){t.slot={e,i:e.n};e.f.setMatrixAt(e.n,t.m);e.t.setMatrixAt(e.n,t.m);e.f.setColorAt(e.n,t.c);e.t.setColorAt(e.n,t.c);e.n++}}
     else if(t.s>.55){const f=VEG.far[t.kind];if(f.n<f.cap){f.m.setMatrixAt(f.n,t.mb);f.n++}}}
   for(const k in VEG.near)for(const e of VEG.near[k]){e.f.count=e.t.count=e.n;e.f.instanceMatrix.needsUpdate=e.t.instanceMatrix.needsUpdate=true;if(e.f.instanceColor){e.f.instanceColor.needsUpdate=e.t.instanceColor.needsUpdate=true}}
   for(const k in VEG.far){const f=VEG.far[k];f.m.count=f.n;f.m.instanceMatrix.needsUpdate=true}
@@ -5014,6 +5134,7 @@ function placeVegetation(){
   const take=(x,z)=>{const k=ckey(Math.floor(x/spacing),Math.floor(z/spacing));let l=taken.get(k);if(!l)taken.set(k,l=[]);l.push({x,z})};
   const keep=[...KEY.bowwood.map(p=>[p,3.6]),...KEY.willow.map(p=>[p,3.6]),[KEY.spawn,6],[KEY.dive,5],[KEY.cherry,3.4],[KEY.pit,10],[KEY.strike,7],[KEY.shelter,8],[KEY.eggs,11],[KEY.signal,9],[KEY.floatplane,4]];
   POIS.forEach(p=>keep.push([[p.x,p.z],p.keep||12]));
+  CH_STARTS.forEach(p=>keep.push([p,4]));   // where each story chapter puts Brian down
   KEY.rasp.forEach(p=>keep.push([p,3.4]));KEY.dead.forEach(p=>keep.push([p,3.5]));KEY.stump.forEach(p=>keep.push([p,3.2]));KEY.snag.forEach(p=>keep.push([p,3]));
   const nearKey=(x,z)=>keep.some(([p,r])=>Math.hypot(p[0]-x,p[1]-z)<r);
   const dens=(x,z)=>{
@@ -5023,7 +5144,7 @@ function placeVegetation(){
     d*=1-.85*sstep(.6,.68,fbm(x*.012+40,z*.012+11,3));if(h>34)d*=.1;else if(h>17)d*=.55;if(Math.abs(z-30)<12&&x>-30&&x<60)d*=.5;return d};
   const VARS={spruce:3,pine:2,birch:2};
   const add=(x,z,kind,s,sapling,vv)=>{const y=gh(x,z),v=vv!==undefined?vv:(R()*VARS[kind])|0,sy=s*(.92+R()*.22),m=MTX(x,y-.08,z,0,R()*TAU,0,s,sy,s),k=.82+R()*.2,c=new THREE.Color(k*(.92+R()*.1),k,k*(.9+R()*.1)),mb=MTX(x,y-.05,z,0,R()*TAU,0,s*(.95+R()*.1),sy,s);
-    VEG.items.push({x,z,y,kind,v,s,m,mb,c});if(!sapling){addCol(x,z,.4*Math.min(1.35,s));}take(x,z)};
+    const t={x,z,y,kind,v,s,m,mb,c};VEG.items.push(t);if(!sapling){t.col=addCol(x,z,.4*Math.min(1.35,s));}take(x,z)};
   KEY.bark.forEach(([x,z])=>add(x,z,'birch',1.0,false));
   POIS.filter(p=>p.big).forEach(p=>add(p.x,p.z,'pine',3.2,false,2));
   const total=LOWQ?2300:3800;let tries=0,placed=0;
@@ -5034,16 +5155,16 @@ function placeVegetation(){
   const sap=LOWQ?900:2000;tries=0;placed=0;
   while(placed<sap&&tries<160000){tries++;const x=lerp(AREA.x0,AREA.x1,R()),z=lerp(AREA.z0,AREA.z1,R());if(R()>dens(x,z)*.9)continue;if(nearKey(x,z))continue;if(nearKeyPts(x,z,4))continue;
     const k=R(),kind=k<.55?'spruce':k<.75?'pine':'birch';add(x,z,kind,.14+R()*.3,true);placed++}
-  buildTreeAssets();VEG.ready=true;lodUpdate(KEY.spawn[0],KEY.spawn[1],true);
+  buildTreeAssets();VEG.ready=true;lodUpdate(KEY.spawn[0],KEY.spawn[1],true);treesInit();
 }
 /* ---------- understory ---------- */
 const VCH=80;
 function instanced(geo,mat,list,opts={}){
   // big scatters are split into 80 m cells so only the ones near the viewer are drawn (see lodUpdate)
-  const parts=new Map();if(list.length>600){for(const o of list){const k=Math.floor(o.x/VCH)+','+Math.floor(o.z/VCH);let a=parts.get(k);if(!a)parts.set(k,a=[]);a.push(o)}}else parts.set('all',list);
+  const parts=new Map();if(list.length>300){for(const o of list){const k=Math.floor(o.x/VCH)+','+Math.floor(o.z/VCH);let a=parts.get(k);if(!a)parts.set(k,a=[]);a.push(o)}}else parts.set('all',list);
   const m=new THREE.Matrix4(),c=new THREE.Color();let last=null;
   for(const [k,sub] of parts){
-    const im=new THREE.InstancedMesh(geo,mat,sub.length);im.frustumCulled=false;im.castShadow=!!opts.cast;im.receiveShadow=!!opts.cast;
+    const im=new THREE.InstancedMesh(geo,mat,sub.length);im.frustumCulled=false;im.castShadow=!!opts.cast;im.receiveShadow=!!opts.cast;im.userData.n=sub.length;if(opts.thin)im.userData.thin=1;   // thin: lower graphics settings draw fewer of these
     let sx=0,sz=0;
     sub.forEach((o,i)=>{m.compose(V3(o.x,o.y,o.z),new THREE.Quaternion().setFromEuler(new THREE.Euler(o.rx||0,o.ry||0,o.rz||0,'YXZ')),V3(o.sx,o.sy??o.sx,o.sz??o.sx));im.setMatrixAt(i,m);if(o.col)im.setColorAt(i,c.setRGB(o.col[0],o.col[1],o.col[2]));sx+=o.x;sz+=o.z});
     im.instanceMatrix.needsUpdate=true;if(im.instanceColor)im.instanceColor.needsUpdate=true;
@@ -5066,25 +5187,25 @@ function placeUnderstory(){
     const s=splat(x,z,h,0);if(R()>(s[1]*.95+s[2]*.5)*(1-s[3]))continue;if(gauss(x,z,155,90,13,10)>.35&&R()<.7)continue;
     const sc=rc(.45,1.05),t=rc(.78,1.12);gl.push({x,y:h-.04,z,ry:R()*TAU,sx:sc*1.0,sy:sc*rc(.7,1.5),col:[t*.9,t*.97,t*.7]})}
   const gm=new THREE.MeshStandardMaterial({map:TX.grassB,alphaTest:.5,side:THREE.DoubleSide,roughness:1,vertexColors:true});windPatch(gm,2.2,30,50,true);(WORLD.wetMats=WORLD.wetMats||[]).push(gm);
-  const gim=instanced(gb.geom(),gm,gl,{cast:false,depthTex:TX.grassB,vis:62});WORLD.grass=gl.length;WORLD.grassMesh=gim;
+  const gim=instanced(gb.geom(),gm,gl,{cast:false,depthTex:TX.grassB,vis:62,thin:true});WORLD.grass=gl.length;WORLD.grassMesh=gim;
   // --- wildflowers
   const fb=new GB();for(let k=0;k<2;k++){const a=k*Math.PI/2+.3,ux=Math.cos(a)*.7,uz=Math.sin(a)*.7;GBcardVC(fb,[-ux/2,0,-uz/2],[ux,0,uz],[0,.7,0],[[.7,.8,.6],[.7,.8,.6],[1,1,1],[1,1,1]])}
   const fl=[];tries=0;while(fl.length<(LOWQ?1500:6500)&&tries<160000){tries++;const x=lerp(AREA.x0,AREA.x1,R()),z=lerp(AREA.z0,AREA.z1,R()),h=gh(x,z);if(!free(x,z,h))continue;const s=splat(x,z,h,0);if(R()>s[1]*.8+(gauss(x,z,266,95,42,40)*.6))continue;const sc=rc(.5,1);fl.push({x,y:h-.03,z,ry:R()*TAU,sx:sc,col:[1,1,1]})}
-  const flm=new THREE.MeshStandardMaterial({map:TX.flowers,alphaTest:.5,side:THREE.DoubleSide,roughness:1,vertexColors:true});windPatch(flm,2,26,44,true);WORLD.wetMats.push(flm);instanced(fb.geom(),flm,fl,{cast:false,vis:50});
+  const flm=new THREE.MeshStandardMaterial({map:TX.flowers,alphaTest:.5,side:THREE.DoubleSide,roughness:1,vertexColors:true});windPatch(flm,2,26,44,true);WORLD.wetMats.push(flm);instanced(fb.geom(),flm,fl,{cast:false,vis:50,thin:true});
   // --- ferns
   const fnb=new GB();for(let k=0;k<4;k++){const a=k*Math.PI/4,ux=Math.cos(a)*1.5,uz=Math.sin(a)*1.5;GBcardVC(fnb,[-ux/2,0,-uz/2],[ux,.0,uz],[0,1.15,0],[[.42,.5,.38],[.42,.5,.38],[1,1,1],[1,1,1]])}
   const fnl=[];tries=0;while(fnl.length<(LOWQ?1400:4800)&&tries<800000){tries++;const x=lerp(AREA.x0,AREA.x1,R()),z=lerp(AREA.z0,AREA.z1,R()),h=gh(x,z);if(!free(x,z,h)||h<1.2)continue;const s=splat(x,z,h,0);if(s[0]>.3||s[3]>.4)continue;if(R()>.55+s[2]*.4)continue;if(gauss(x,z,155,90,12,9)>.4)continue;const sc=rc(.6,1.4);fnl.push({x,y:h-.05,z,ry:R()*TAU,sx:sc,col:[rc(.8,1.1),rc(.9,1.1),rc(.75,1)]})}
-  const fnm=new THREE.MeshStandardMaterial({map:TX.fern,alphaTest:.5,side:THREE.DoubleSide,roughness:.95,vertexColors:true});windPatch(fnm,1.6,36,62,true);WORLD.wetMats.push(fnm);instanced(fnb.geom(),fnm,fnl,{cast:false,vis:66});
+  const fnm=new THREE.MeshStandardMaterial({map:TX.fern,alphaTest:.5,side:THREE.DoubleSide,roughness:.95,vertexColors:true});windPatch(fnm,1.6,36,62,true);WORLD.wetMats.push(fnm);instanced(fnb.geom(),fnm,fnl,{cast:false,vis:66,thin:true});
   // --- shrubs
   const bb=new GB();for(let k=0;k<3;k++){const a=k*Math.PI/3,ux=Math.cos(a)*2.0,uz=Math.sin(a)*2.0;GBcardVC(bb,[-ux/2,.05,-uz/2],[ux,0,uz],[0,1.5,0],[[.36,.4,.32],[.36,.4,.32],[1,1,1],[1,1,1]])}GBcardVC(bb,[-.95,.75,-.95],[1.9,0,0],[0,.03,1.9],[[.9,.95,.8],[.9,.95,.8],[1,1,.9],[1,1,.9]]);
   const bl=[];tries=0;while(bl.length<(LOWQ?700:1700)&&tries<800000){tries++;const x=lerp(AREA.x0,AREA.x1,R()),z=lerp(AREA.z0,AREA.z1,R()),h=gh(x,z);if(!free(x,z,h)||h<1.2)continue;const s=splat(x,z,h,0);if(s[0]>.2||s[3]>.4)continue;if(R()>.45)continue;if(nearKeyPts(x,z,4))continue;const sc=rc(.7,1.35);bl.push({x,y:h-.05,z,ry:R()*TAU,sx:sc,col:[rc(.75,1.05),rc(.85,1.05),rc(.7,.95)]});if(sc>1.1)addCol(x,z,.6*sc)}
   const bm=new THREE.MeshStandardMaterial({map:TX.bushLeaf,alphaTest:.5,side:THREE.DoubleSide,roughness:.9,vertexColors:true});windPatch(bm,1.2);WORLD.wetMats.push(bm);instanced(bb.geom(),bm,bl,{cast:true,depthTex:TX.bushLeaf,vis:130});
   // --- litter: pine cones, twigs, mushrooms, fallen mossy logs
   const cg=new THREE.CylinderGeometry(.012,.03,.1,7);cg.translate(0,.05,0);const cl=[];tries=0;while(cl.length<(LOWQ?1200:4200)&&tries<120000){tries++;const x=lerp(AREA.x0,AREA.x1,R()),z=lerp(AREA.z0,AREA.z1,R()),h=gh(x,z);if(!free(x,z,h))continue;const s=splat(x,z,h,0);if(s[2]<.3)continue;cl.push({x,y:h+.012,z,rx:R()*6,ry:R()*TAU,rz:Math.PI/2+rc(-.4,.4),sx:rc(.8,1.5)})}
-  const cm=new THREE.MeshStandardMaterial({map:TX.cone,roughness:.9,bumpMap:TX.cone,bumpScale:1.5});instanced(cg,cm,cl,{cast:false,vis:34});
+  const cm=new THREE.MeshStandardMaterial({map:TX.cone,roughness:.9,bumpMap:TX.cone,bumpScale:1.5});instanced(cg,cm,cl,{cast:false,vis:34,thin:true});
   const tg=new THREE.CylinderGeometry(.006,.012,1,4);tg.translate(0,.5,0);const tl=[];tries=0;while(tl.length<(LOWQ?1500:5000)&&tries<120000){tries++;const x=lerp(AREA.x0,AREA.x1,R()),z=lerp(AREA.z0,AREA.z1,R()),h=gh(x,z);if(!free(x,z,h))continue;const s=splat(x,z,h,0);if(s[2]<.25)continue;tl.push({x,y:h+.02,z,rx:0,ry:R()*TAU,rz:Math.PI/2,sx:rc(.5,1.2),sy:rc(.15,.7),sz:1,col:[rc(.5,.8),rc(.4,.6),rc(.3,.45)]})}
-  instanced(tg,new THREE.MeshStandardMaterial({color:0x6a5a46,roughness:1,vertexColors:false}),tl,{cast:false,vis:34});
-  const mg=new GB(),capm=new THREE.SphereGeometry(.05,10,6,0,TAU,0,Math.PI*.55);capm.translate(0,.09,0);const stm=new THREE.CylinderGeometry(.012,.016,.09,6);stm.translate(0,.045,0);
+  instanced(tg,new THREE.MeshStandardMaterial({color:0x6a5a46,roughness:1,vertexColors:false}),tl,{cast:false,vis:34,thin:true});
+  const mg=new GB(),capm=new THREE.SphereGeometry(.05,8,4,0,TAU,0,Math.PI*.55);capm.translate(0,.09,0);const stm=new THREE.CylinderGeometry(.012,.016,.09,6);stm.translate(0,.045,0);
   const ml=[];tries=0;while(ml.length<(LOWQ?150:520)&&tries<120000){tries++;const x=lerp(AREA.x0,AREA.x1,R()),z=lerp(AREA.z0,AREA.z1,R()),h=gh(x,z);if(!free(x,z,h))continue;const s=splat(x,z,h,0);if(s[2]<.4)continue;ml.push({x,y:h,z,ry:R()*TAU,sx:rc(.7,1.6),col:[1,1,1]})}
   instanced(capm,new THREE.MeshStandardMaterial({color:0xb8895a,roughness:.55}),ml,{cast:false,vis:40});instanced(stm,new THREE.MeshStandardMaterial({color:0xe6dcc6,roughness:.8}),ml,{cast:false,vis:40});
   // fallen logs with moss on top
@@ -5112,13 +5233,16 @@ class PS{
     this.col[i*4]=col[0];this.col[i*4+1]=col[1];this.col[i*4+2]=col[2];this.col[i*4+3]=this.a0[i];this.size[i]=size;
   }
   update(dt){
+    let live=0;
     for(let i=0;i<this.n;i++){
-      if(this.life[i]<=0)continue;this.life[i]-=dt;
+      if(this.life[i]<=0)continue;live++;this.life[i]-=dt;
       if(this.life[i]<=0){this.size[i]=0;this.col[i*4+3]=0;continue}
       this.vel[i*3+1]+=this.grav[i]*dt;this.pos[i*3]+=this.vel[i*3]*dt;this.pos[i*3+1]+=this.vel[i*3+1]*dt;this.pos[i*3+2]+=this.vel[i*3+2]*dt;
       const k=this.life[i]/this.maxLife[i];this.size0[i]+=this.grow[i]*dt;this.size[i]=this.size0[i];this.col[i*4+3]=this.a0[i]*Math.min(1,k*3)*(this.additive?1:Math.min(1,(1-k)*8+.0)*Math.min(1,k*1.4));
     }
-    this.geo.attributes.position.needsUpdate=true;this.geo.attributes.pcol.needsUpdate=true;this.geo.attributes.size.needsUpdate=true;
+    // only the live part of the buffer is drawn and sent to the GPU, and nothing at all once every particle has gone
+    while(this.n>0&&this.life[this.n-1]<=0)this.n--;this.geo.setDrawRange(0,this.n);
+    if(live&&this.n>0){const A=this.geo.attributes;for(const [a,k] of[[A.position,3],[A.pcol,4],[A.size,1]]){a.updateRange.offset=0;a.updateRange.count=this.n*k;a.needsUpdate=true}}
   }
 }
 let PSN=null,PSA=null;
@@ -5612,7 +5736,13 @@ const EYE=1.48,GRAV=14;let ia=null;
 const fwdV=(yaw=pl.yaw)=>V3(-Math.sin(yaw),0,-Math.cos(yaw)),rightV=(yaw=pl.yaw)=>V3(Math.cos(yaw),0,-Math.sin(yaw));
 const yawTo=(x,z)=>Math.atan2(-(x-pl.x),-(z-pl.z));
 function lookDir(){const cy=Math.cos(pl.pitch);return V3(-Math.sin(pl.yaw)*cy,Math.sin(pl.pitch),-Math.cos(pl.yaw)*cy)}
-function placePlayer(x,z,yaw=0){pl.swim=false;pl.x=x;pl.z=z;pl.y=gh(x,z);pl.vx=pl.vz=pl.vy=0;pl.yaw=yaw;pl.pitch=0;pl.on=true;pl.roll=0;pl.kneel=0;pl.lock=0;pl.pose='';pl.charge=0;pl.sick=0;pl.dead=false;pl.inv=0;pl.sit=0;pl.quills=0;pl.hasH=true;S.camLock=null;cp.x=x;cp.y=pl.y+EYE;cp.z=z;cp.yaw=yaw;cp.pitch=0}
+/* how far a point is inside the nearest collider (0 = clear) */
+/* how far (x,z) lies outside the area this mode lets Brian walk or swim in (0 = inside) */
+function areaOut(x,z){return S.open?Math.max(0,WB.x0+14-x,x-(WB.x1-14),WB.z0+14-z,z-(WB.z1-14)):Math.max(0,x-S.limitR,-34-x,z-175,-60-z)}
+function colPen(x,z,pad=.38){let m=0;for(const c of colliders(x,z)){const d=c.r+pad-Math.hypot(c.x-x,c.z-z);if(d>m)m=d}return m}
+/* the closest spot to (x,z) where Brian is not standing inside a tree, rock or wall */
+function freeSpot(x,z){if(colPen(x,z,.42)<=0)return[x,z];for(let r=.3;r<=6;r+=.3)for(let k=0;k<16;k++){const a=k/16*Math.PI*2,nx=x+Math.cos(a)*r,nz=z+Math.sin(a)*r;if(colPen(nx,nz,.42)<=0&&waterDepthAt(nx,nz)<.6)return[nx,nz]}return[x,z]}
+function placePlayer(x,z,yaw=0){[x,z]=freeSpot(x,z);pl.swim=false;pl.dive=false;DIVE.held=false;DIVE.strap=0;DIVE.cab=false;S.breath=1;pl.x=x;pl.z=z;pl.y=gh(x,z);pl.vx=pl.vz=pl.vy=0;pl.yaw=yaw;pl.pitch=0;pl.on=true;pl.roll=0;pl.kneel=0;pl.lock=0;pl.pose='';pl.charge=0;pl.sick=0;pl.dead=false;pl.inv=0;pl.sit=0;pl.quills=0;pl.hasH=true;S.camLock=null;cp.x=x;cp.y=pl.y+EYE;cp.z=z;cp.yaw=yaw;cp.pitch=0}
 const nearFire=(r=14)=>WORLD.fires.some(f=>f.lit&&Math.hypot(pl.x-f.x,pl.z-f.z)<r);
 function canAct(){return scene==='play'&&!DLG.cur&&!MINI.on&&pl.lock<=0&&!pl.dead&&!S.cut}
 function anim(pose,sec,kneel=0){pl.pose=pose;pl.poseT=0;pl.poseDur=sec;pl.lock=sec;pl.kneelTo=kneel}
@@ -5716,19 +5846,24 @@ function playerUpdate(dt){
   let fw=0,st=0;if(free||S.moveOK){fw=(isDown('fwd')?1:0)-(isDown('back')?1:0)+joy.y;st=(isDown('right')?1:0)-(isDown('left')?1:0)+joy.x}
   let l=Math.hypot(fw,st);if(l>1){fw/=l;st/=l;l=1}
   const f=fwdV(),r=rightV();let wx=f.x*fw+r.x*st,wz=f.z*fw+r.z*st;
-  const wd=waterDepthAt(pl.x,pl.z);pl.wade=clamp((wd-.1)/.6,0,1);if(S.open){if(wd>1.05)pl.swim=true;else if(wd<.8)pl.swim=false}else pl.swim=false;
-  let spd=3.3*(isDown('run')&&!pl.drawing?1.65:1)*(pl.drawing?.55:1)*(pl.sick>0?.65:1)*(pl.swim?.72:1-.38*pl.wade);
+  const wd=waterDepthAt(pl.x,pl.z);pl.wade=clamp((wd-.1)/.6,0,1);if(canSwim()){if(wd>1.0)pl.swim=true;else if(wd<.78)pl.swim=false}else pl.swim=false;
+  if(pl.swim&&!S.fl.swimTip&&scene==='play'){S.fl.swimTip=1;toast(TOUCH?'Swimming. Tap STROKE for a strong stroke, look down and swim to dive.':'Swimming. Click for a strong stroke, look down and swim (or hold C) to dive.',5)}
+  if(!pl.dive)S.breath=Math.min(1,(S.breath??1)+dt/3);
+  if(!pl.dive&&pl.swim&&free&&(hit.dodge||isDown('dodge')||(pl.pitch<-.55&&fw>.3)))diveStart();
+  if(pl.dive)diveMove(dt,free?fw:0,free?st:0);else{
+  let spd=3.3*(isDown('run')&&!pl.drawing?1.65:1)*(pl.drawing?.55:1)*(pl.sick>0?.65:1)*(pl.swim?.45:1-.38*pl.wade);
   if(S.stormRun&&S.storm>.2){const wl=Math.max(0,-wx/(l||1));spd*=1-.5*S.storm*(l?wl:0)}
   if(pl.roll>0){pl.roll-=dt;pl.vx=pl.rdx*9.5;pl.vz=pl.rdz*9.5;if(pl.roll<=0){pl.roll=0;pl.rollCd=.45}}
-  else{const k=1-Math.exp(-(pl.on?11:2.4)*dt);pl.vx=lerp(pl.vx,wx*spd,k);pl.vz=lerp(pl.vz,wz*spd,k)}
+  else{const k=1-Math.exp(-(pl.swim?1.6:pl.on?11:2.4)*dt);pl.vx=lerp(pl.vx,wx*spd,k);pl.vz=lerp(pl.vz,wz*spd,k)}
+  if(pl.swim)swimPush(dt,f,false);else if(!pl.dive){SWIM.t=0;SWIM.amp=0}
   if(free&&hit.dodge&&pl.on&&!pl.swim&&!pl.roll&&pl.rollCd<=0){pl.roll=.38;pl.inv=.5;let dx=wx,dz=wz;if(l<.1){dx=r.x;dz=r.z}else{const n=Math.hypot(dx,dz);dx/=n;dz/=n}pl.rdx=dx;pl.rdz=dz;Snd.whoosh()}
   if(free&&hit.jump&&pl.on&&!pl.swim&&!pl.roll){pl.vy=4.7;pl.on=false;Snd.tone(220,.1,'triangle',.06,140)}
   if(!pl.on)pl.vy-=GRAV*dt;
   // integrate with collisions
   const tryMove=(nx,nz)=>{
-    if(waterDepthAt(nx,nz)>.95&&!S.open)return false;
-    for(const c of colliders(nx,nz)){if(Math.hypot(c.x-nx,c.z-nz)<c.r+.38)return false}
-    if(S.open){if(nx<WB.x0+14||nx>WB.x1-14||nz<WB.z0+14||nz>WB.z1-14)return false}else if(nx>S.limitR||nx<-34||nz>175||nz<-60)return false;
+    if(waterDepthAt(nx,nz)>.95&&!canSwim())return false;
+    for(const c of colliders(nx,nz)){const dn=Math.hypot(c.x-nx,c.z-nz);if(dn<c.r+.38&&dn<=Math.hypot(c.x-pl.x,c.z-pl.z))return false}   // stepping away from something you overlap is always allowed
+    {const o=areaOut(nx,nz);if(o>0&&o>=areaOut(pl.x,pl.z)-1e-6)return false}   // outside the playable area only a step back toward it is allowed
     if(pl.on&&!pl.swim){const g0=gh(pl.x,pl.z),g1=gh(nx,nz),dd=Math.hypot(nx-pl.x,nz-pl.z);if(dd>1e-4&&(g1-g0)/dd>1.5&&g1-g0>.03)return false}
     return true};
   let nx=pl.x+pl.vx*dt,nz=pl.z+pl.vz*dt;
@@ -5740,15 +5875,17 @@ function playerUpdate(dt){
   else if(pl.y<=g0){pl.y=g0;if(!pl.on){pl.on=true;pl.land=.5;Snd.step('soil');burst(pl.x,g0+.05,pl.z,4,1.2,.5,.2,[.6,.55,.42],false,-3)}pl.vy=0}else if(pl.on&&pl.y>g0+.12){pl.on=false}
   pl.sp=Math.hypot(pl.vx,pl.vz);pl.land=Math.max(0,pl.land-dt*3);
   if(pl.on&&pl.sp>.6&&!pl.roll){const pb=pl.bob;pl.bob+=dt*pl.sp*2.4;if(Math.floor(pb/Math.PI)!==Math.floor(pl.bob/Math.PI))stepSound()}else pl.bob+=dt*.3;
+  }
   if(pl.sick>0){pl.sick-=dt}
   // throw
   // a quick click swings the hatchet; holding the button winds up a throw that flies when released
-  if(S.weapon==='bow'&&S.fl.bow)bowInput(dt,free);
+  if(pl.dive||pl.swim){pl.hold=0;pl.charge=0;if(free&&hit.throw)swimStroke()}
+  else if(S.weapon==='bow'&&S.fl.bow)bowInput(dt,free);
   else if(free&&pl.hasH&&!pl.roll){if(hit.throw)pl.hold=.001;if(pl.hold>0){const dn=isDown('throw');if(dn){pl.hold+=dt;pl.charge=pl.hold>.24?Math.min(1,(pl.hold-.24)/.85):0}if(!dn){const h=pl.hold,c=pl.charge;pl.hold=0;pl.charge=0;if(h<.24)swingHatchet();else throwHatchet(Math.max(.12,c))}}}
   else if(!free&&(pl.charge>0||pl.hold>0)&&!hat.on){pl.charge=0;pl.hold=0}
   hatchetUpdate(dt);
   // interaction focus
-  ia=null;if(free){let best=1e9;const fwdH=V3(-Math.sin(pl.yaw),0,-Math.cos(pl.yaw));for(const o of IA){const lab=o.pr();if(!lab)continue;let d,tx,tz;if(o.test){if(!o.test())continue;d=0;tx=pl.x+fwdH.x*2;tz=pl.z+fwdH.z*2}else{tx=o.pos[0];tz=o.pos[1];d=Math.hypot(pl.x-tx,pl.z-tz);if(d>o.r)continue;const c=((tx-pl.x)*fwdH.x+(tz-pl.z)*fwdH.z)/(d||1);if(c<.35&&d>1.6)continue}
+  ia=null;if(free){let best=1e9;const fwdH=V3(-Math.sin(pl.yaw),0,-Math.cos(pl.yaw));for(const o of IA){if(pl.dive&&!o.dive)continue;const lab=o.pr();if(!lab)continue;let d,tx,tz;if(o.test){if(!o.test())continue;d=0;tx=pl.x+fwdH.x*2;tz=pl.z+fwdH.z*2}else{tx=o.pos[0];tz=o.pos[1];d=Math.hypot(pl.x-tx,pl.z-tz);if(d>o.r)continue;const c=((tx-pl.x)*fwdH.x+(tz-pl.z)*fwdH.z)/(d||1);if(c<.35&&d>1.6)continue}
       const sc=d+(o.test?1000:0)-(o.pri||0);if(sc<best){best=sc;ia={o,lab,tx,tz}}}}
   if(free&&ia&&(hit.act||hit.click&&!locked&&false)){if(ia.lab[0]==='!'){Snd.bad();toast(ia.lab.slice(1))}else ia.o.act()}
   // survival
@@ -5770,7 +5907,8 @@ function updateCamera(dt){
   const bobA=pl.on&&!pl.roll?Math.min(1,pl.sp/4):0,run=isDown('run')?1:0;
   if(lk){tx=lk.x;ty=lk.y;tz=lk.z;tyaw=lk.yaw;tp=lk.pitch}
   else{const eye=EYE-pl.kneel*.78-(pl.roll>0?.5*Math.sin(Math.min(1,(1-pl.roll/.38))*Math.PI):0)-pl.land*.08;
-    tx=pl.x;tz=pl.z;ty=pl.y+eye+Math.sin(pl.bob)*.028*bobA*(1+run*.5);tyaw=pl.yaw;tp=pl.pitch-pl.kneel*.35;tr=Math.cos(pl.bob)*.006*bobA+(pl.roll>0?pl.rdx*0:0)}
+    tx=pl.x;tz=pl.z;ty=pl.y+eye+Math.sin(pl.bob)*.028*bobA*(1+run*.5);tyaw=pl.yaw;tp=pl.pitch-pl.kneel*.35;tr=Math.cos(pl.bob)*.006*bobA+(pl.roll>0?pl.rdx*0:0);
+    if(pl.dive){ty=DIVE.hy+Math.sin(T*1.4)*.025;tr=Math.sin(T*.9)*.02}}
   if(lk){const k=1-Math.exp(-4*dt);cp.x=lerp(cp.x,tx,k);cp.y=lerp(cp.y,ty,k);cp.z=lerp(cp.z,tz,k);cp.yaw+=angDiff(cp.yaw,tyaw)*k;cp.pitch=lerp(cp.pitch,tp,k)}
   else{cp.x=tx;cp.y=ty;cp.z=tz;cp.yaw=tyaw;cp.pitch=tp}
   cp.roll=tr;camS.shake=Math.max(0,camS.shake-dt*1.6);const sh=camS.shake;
@@ -5780,7 +5918,9 @@ function updateCamera(dt){
 function titleCamera(dt){const c=GL.cam,a=T*.045+.6,cx=22,cz=-6;c.position.set(cx+Math.cos(a)*14,gh(cx+Math.cos(a)*14,cz+Math.sin(a)*14)+2.1,cz+Math.sin(a)*14);c.lookAt(KEY.wreck[0],3.5,KEY.wreck[1]);c.rotation.order='YXZ'}
 /* ---------- viewmodel animation ---------- */
 function updateViewmodel(dt){
-  if(!VM)return;const show=scene==='play'&&!S.camLock&&!MINI.on;GL.vmOn=show;if(!show)return;
+  if(!VM)return;const show=scene==='play'&&!S.camLock&&!MINI.on;GL.vmOn=show;
+  if(TOUCH){const b=VM.axeBtn||(VM.axeBtn=document.querySelector('#touch [data-k=throw]')),t=pl.swim||pl.dive?'Stroke':'Axe';if(b&&b.textContent!==t)b.textContent=t}
+  if(!show)return;if(pl.swim||pl.dive){swimVM(dt);return}VM.L.children[0].rotation.set(0,.2,0);
   const R=VM.R,L=VM.L,bobA=pl.on&&!pl.roll?Math.min(1,pl.sp/4):0,bx=Math.sin(pl.bob*.5)*.012*bobA,by=Math.abs(Math.sin(pl.bob))*.02*bobA;
   let tp=V3(.28+bx,-.155+by+Math.sin(T*1.5)*.003,-.34),tr=V3(-.1,.22,.1),lp=V3(-.3-bx,-.38+by,-.3),lr=V3(-.12,-.2,-.08);
   const ch=pl.charge;
@@ -5851,7 +5991,7 @@ function beastHit(b,dmg,fromThrow){
   else{Snd.roar();b.woundT=6;if(b.hp<80||b.hits>=2){b.state='flee';b.flee=30;toast('The bear is hurt and lumbers away.',3)}else{b.state='charge';b.t=0;b.hitThis=false}}
 }
 function wolfBite(b){
-  if(pl.inv>0||pl.dead||pl.swim)return false;const o=BST.wolf;hurt(o.bite);pl.vx+=Math.sin(b.yaw)*1.6;pl.vz+=Math.cos(b.yaw)*1.6;b.bite=1;Snd.snarl();S.fl.bitten=(S.fl.bitten||0)+1;
+  if(pl.inv>0||pl.dead||pl.swim||pl.dive)return false;const o=BST.wolf;hurt(o.bite);pl.vx+=Math.sin(b.yaw)*1.6;pl.vz+=Math.cos(b.yaw)*1.6;b.bite=1;Snd.snarl();S.fl.bitten=(S.fl.bitten||0)+1;
   if(!S.fl.biteToast){S.fl.biteToast=1;toast('Fight back (E to swing), or get to a fire or into the water!',4.5)}return true}
 /* ---- brains ---- */
 function steer(b,tx,tz,spd,dt,turn=5){
@@ -5871,7 +6011,7 @@ function wanderTo(b,dt,spd){
 function wolfAI(b,dt){
   const o=BST.wolf,dx=pl.x-b.x,dz=pl.z-b.z,d=Math.hypot(dx,dz),toP=Math.atan2(dx,dz),fireD=nearestFire(b.x,b.z),plFire=nearFire(10),runner=isDown('run')&&pl.sp>3;
   b.t-=dt;b.cd=Math.max(0,b.cd-dt);b.bite=Math.max(0,b.bite-dt*2.2);
-  const sees=!pl.dead&&!S.cut&&d<o.sight*(runner?1.3:1)*(nightF(S.tod)>.4?1.25:1)&&!(pl.swim&&d>8);
+  const sees=!pl.dead&&!S.cut&&d<o.sight*(runner?1.3:1)*(nightF(S.tod)>.4?1.25:1)&&!((pl.swim||pl.dive)&&d>8);
   if(fireD<12&&b.state!=='flee'){b.state='flee';b.flee=6}
   switch(b.state){
     case'wander':if(b.roam&&!sees&&!plFire&&!pl.dead){steer(b,pl.x+Math.sin(b.t*.7)*12,pl.z+Math.cos(b.t*.5)*12,o.spd*2.6,dt,3);b.head=lerp(b.head,.25,dt*3)}else wanderTo(b,dt,o.spd);if(sees&&!plFire){b.state='alert';b.t=1.3;if(!b.terr||Math.random()<.5)if(Snd.growl)Snd.growl(.7)}break;
@@ -5889,7 +6029,7 @@ function wolfAI(b,dt){
       if(plFire&&d>3){b.state='circle';b.t=0;break}
       b.head=lerp(b.head,.35,dt*6);
       if(d>o.melee-.6){steer(b,pl.x,pl.z,o.run,dt,7)}else{b.yaw+=clamp(angDiff(b.yaw,toP),-8*dt,8*dt);b.sp=lerp(b.sp,pl.sp*.8,dt*6);b.x+=(pl.vx*.6)*dt;b.z+=(pl.vz*.6)*dt;if(b.cd<=0){b.cd=o.biteCd+Math.random()*.5;wolfBite(b)}}
-      if(pl.swim&&d<30){b.state='circle';b.t=0}
+      if((pl.swim||pl.dive)&&d<30){b.state='circle';b.t=0}
       if(pl.dead||S.cut){b.state='wander'}break}
     case'flee':{b.flee-=dt;const fa=fireD<14?Math.atan2(b.x-pl.x,b.z-pl.z):toP+Math.PI;steer(b,b.x+Math.sin(fa)*20,b.z+Math.cos(fa)*20,o.run*.92,dt,5);b.head=lerp(b.head,0,dt*3);if(b.flee<=0){b.state=b.roam?'wander':'wander';b.hr=b.roam?160:b.hr;if(b.roam)b.hx=b.x,b.hz=b.z}break}
   }
@@ -5897,7 +6037,7 @@ function wolfAI(b,dt){
 function bearAI(b,dt){
   const o=BST.bear,dx=pl.x-b.x,dz=pl.z-b.z,d=Math.hypot(dx,dz),toP=Math.atan2(dx,dz),fireD=nearestFire(b.x,b.z),plFire=nearFire(11),runner=isDown('run')&&pl.sp>3;
   b.t+=dt;b.cd=Math.max(0,b.cd-dt);b.woundT=Math.max(0,b.woundT-dt);
-  const sees=!pl.dead&&!S.cut&&d<o.sight*(runner?1.25:1)&&!(pl.swim&&d>10);
+  const sees=!pl.dead&&!S.cut&&d<o.sight*(runner?1.25:1)&&!((pl.swim||pl.dive)&&d>10);
   if(fireD<11&&!['flee','dead'].includes(b.state)){b.state='flee';b.flee=7}
   switch(b.state){
     case'wander':b.t=Math.max(0,b.t-dt);b.rise=lerp(b.rise,0,dt*4);if(b.forage>0){b.forage-=dt;b.head=lerp(b.head,.9,dt*4);idle(b,dt)}else{wanderTo(b,dt,o.spd);if(Math.random()<dt*.04)b.forage=rnd(3,7)}
@@ -5934,6 +6074,7 @@ function swingHatchet(){
     const b=S.open?beastTarget(3.7,.2):null;if(b&&!pl.dead){Snd.chop();beastHit(b,b.kind==='wolf'?24:20);camS.shake=.2;hitSomething=true;if(!b.dead&&b.kind==='bear'&&b.state==='charge'){b.state='recover';b.t=0}}
     if(!hitSomething)for(const bd of birds){if(bd.dead)continue;const dx=bd.x-pl.x,dz=bd.z-pl.z,d=Math.hypot(dx,dz);if(d<3.4&&(dx*f.x+dz*f.z)/(d||1)>.3){killBird(bd,false);Snd.chop();hitSomething=true;break}}
     if(!hitSomething)for(const dk of ducks){if(dk.dead)continue;const dx=dk.x-pl.x,dz=dk.z-pl.z,d=Math.hypot(dx,dz);if(d<3.4&&(dx*f.x+dz*f.z)/(d||1)>.3){killDuck(dk);Snd.chop();hitSomething=true;break}}
+    if(!hitSomething){const t=treeTarget();if(t){treeHit(t);hitSomething=true}}
     if(!hitSomething){const px=pl.x+f.x*1.9,pz=pl.z+f.z*1.9,gy=gh(px,pz);Snd.step('soil');burst(px,gy+.1,pz,3,1.1,.4,.05,[.6,.5,.38],false,-5)}})}
 function beastsHitBy(pos,dmgBase){
   for(const b of beasts){if(b.dead)continue;const o=BST[b.kind];if(Math.hypot(pos.x-b.x,pos.z-b.z)<o.r+.35&&pos.y<b.y+(b.kind==='bear'?1.8:1.1)&&pos.y>b.y-.1){beastHit(b,dmgBase*(b.kind==='bear'?.8:1),true);return b}}return null}
@@ -6018,12 +6159,12 @@ function sdPrimX(p,x,y,z){
 }
 function sdfEvalX(list,x,y,z){let d=1,first=true;for(const p of list){const di=sdPrimX(p,x,y,z);if(first){d=di;first=false}else d=sMin(d,di,p.k)}return d}
 /* surface nets over the primitive set; returns positions, normals and the faces */
-function sdfNets(prims,min,max,hs){
+function sdfNets(prims,min,max,hs,off=0){
   const cut=.03,nx=Math.ceil((max[0]-min[0])/hs)+2,ny=Math.ceil((max[1]-min[1])/hs)+2,nz=Math.ceil((max[2]-min[2])/hs)+2,val=new Float32Array(nx*ny*nz).fill(1),B=6;
   const near=(x0,y0,z0,x1,y1,z1)=>prims.filter(p=>p.hi[0]+cut>=x0&&p.lo[0]-cut<=x1&&p.hi[1]+cut>=y0&&p.lo[1]-cut<=y1&&p.hi[2]+cut>=z0&&p.lo[2]-cut<=z1);
   for(let bz=0;bz<nz;bz+=B)for(let by=0;by<ny;by+=B)for(let bx=0;bx<nx;bx+=B){
     const x0=min[0]+bx*hs,y0=min[1]+by*hs,z0=min[2]+bz*hs,list=near(x0,y0,z0,x0+B*hs,y0+B*hs,z0+B*hs);if(!list.length)continue;
-    for(let k=bz;k<Math.min(nz,bz+B);k++)for(let j=by;j<Math.min(ny,by+B);j++)for(let i=bx;i<Math.min(nx,bx+B);i++)val[i+nx*(j+ny*k)]=sdfEvalX(list,min[0]+i*hs,min[1]+j*hs,min[2]+k*hs)}
+    for(let k=bz;k<Math.min(nz,bz+B);k++)for(let j=by;j<Math.min(ny,by+B);j++)for(let i=bx;i<Math.min(nx,bx+B);i++)val[i+nx*(j+ny*k)]=sdfEvalX(list,min[0]+i*hs,min[1]+j*hs,min[2]+k*hs)-off}
   const vid=new Int32Array(nx*ny*nz).fill(-1),P=[],E=[[0,1],[2,3],[4,5],[6,7],[0,2],[1,3],[4,6],[5,7],[0,4],[1,5],[2,6],[3,7]],cv=new Float32Array(8);
   for(let k=0;k<nz-1;k++)for(let j=0;j<ny-1;j++)for(let i=0;i<nx-1;i++){
     let m=0;for(let c=0;c<8;c++){const v=val[(i+(c&1))+nx*((j+((c>>1)&1))+ny*(k+(c>>2)))];cv[c]=v;if(v<0)m|=1<<c}
@@ -6216,15 +6357,15 @@ const RIGS={};
 function rigData(kind){
   if(RIGS[kind])return RIGS[kind];
   const sp=SPECIES[kind],B=[];sp.skel(B);const boneIndex={};B.forEach((b,i)=>boneIndex[b[0]]=i);
-  const prims=sp.prims(),mk2=(hs)=>{const net=sdfNets(prims,sp.min,sp.max,hs),d=sdfDress(net,prims,sp,boneIndex),g=new THREE.BufferGeometry();
+  const prims=sp.prims(),mk2=(hs,off=0)=>{const m=off?off+hs:0,net=sdfNets(prims,sp.min.map(v=>v-m),sp.max.map(v=>v+m),hs,off),d=sdfDress(net,prims,sp,boneIndex),g=new THREE.BufferGeometry();
     g.setAttribute('position',new THREE.Float32BufferAttribute(net.P,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(net.N,3));g.setAttribute('color',new THREE.BufferAttribute(d.C,3));
     g.setAttribute('skinIndex',new THREE.Uint16BufferAttribute(d.SI,4));g.setAttribute('skinWeight',new THREE.Float32BufferAttribute(d.SW,4));g.setAttribute('aFlow',new THREE.BufferAttribute(d.F,1));g.setAttribute('aFurK',new THREE.BufferAttribute(d.K,1));g.setAttribute('aDir',new THREE.BufferAttribute(d.Dr,4));g.setIndex(net.I);g.computeBoundingSphere();return g};
-  const base=mk2(sp.hs),c=mk2(sp.coarse);let shell=null;
+  const base=mk2(sp.hs),c=mk2(sp.coarse),far=mk2(sp.coarse*2.2,sp.coarse*.6);let shell=null;
   if(sp.fur){const n=sp.fur.layers,vc=c.attributes.position.count,ic=c.index.count,sg=new THREE.BufferGeometry(),L=new Float32Array(vc*n),I=new Uint32Array(ic*n);
     for(const name of['position','normal','color','skinIndex','skinWeight','aFlow','aFurK','aDir']){const a=c.attributes[name],arr=new a.array.constructor(a.array.length*n);for(let k=0;k<n;k++)arr.set(a.array,k*a.array.length);sg.setAttribute(name,new THREE.BufferAttribute(arr,a.itemSize))}
     for(let k=0;k<n;k++){L.fill((k+1)/n,k*vc,(k+1)*vc);for(let i=0;i<ic;i++)I[k*ic+i]=c.index.array[i]+k*vc}
     sg.setAttribute('aLayer',new THREE.BufferAttribute(L,1));sg.setIndex(new THREE.BufferAttribute(I,1));sg.computeBoundingSphere();shell=sg}
-  RIGS[kind]={sp,B,base,lo:c,shell,baseMat:furBaseMat(sp),shellMat:sp.fur?furShellMat(sp):null};return RIGS[kind];
+  RIGS[kind]={sp,B,base,lo:c,far,shell,baseMat:furBaseMat(sp),shellMat:sp.fur?furShellMat(sp):null};return RIGS[kind];
 }
 function rigMats(kind,vi){const D=rigData(kind);if(!vi)return{b:D.baseMat,s:D.shellMat};D.vm=D.vm||{};if(!D.vm[vi]){const t=D.sp.coats[vi];D.vm[vi]={b:furBaseMat(D.sp,t),s:D.sp.fur?furShellMat(D.sp,t):null}}return D.vm[vi]}
 function makeRig(kind,vi=0){
@@ -6236,14 +6377,25 @@ function makeRig(kind,vi=0){
   const rest={};for(const n in bones)rest[n]=bones[n].position.clone();
   group.userData.rig={kind,bones,mesh,shell,rest,sp:D.sp,ph:Math.random()*6,br:Math.random()*6,pant:0,nk:0,hk:0,yk:0,nod:0,slope:0,ear:0,flick:2+Math.random()*4,look:0,lookT:2};return group;
 }
-/* level of detail: the fur shells only up close, a coarser body further out */
-function rigLOD(rig,d){const D=RIGS[rig.kind],k=rig.kind==='moose'?1.5:rig.kind==='bear'?1.2:1,g=d>30*k?D.lo:D.base;if(rig.mesh.geometry!==g)rig.mesh.geometry=g;
+/* level of detail: the fur shells only up close, a coarser body further out and a much simpler one in the distance */
+function rigLOD(rig,d){const D=RIGS[rig.kind],k=(rig.kind==='moose'?1.5:rig.kind==='bear'?1.2:1)*(Q.tier==='low'?.75:1),g=d>75*k?D.far:d>30*k?D.lo:D.base;if(rig.mesh.geometry!==g)rig.mesh.geometry=g;
   if(rig.shell)rig.shell.visible=d<(Q.tier==='low'?9:Q.tier==='medium'?18:26)*k}
+/* level of detail for the smooth-part animals (birds, ducks, loons, fish, the porcupine): further away they swap to
+   coarser copies of their parts and drop their eyes. Distances widen when the bow zooms in. */
+const PLOD=new Set(),_plv=new THREE.Vector3();
+function lodPrep(g,near,far){const parts=[],eyes=[];g.traverse(o=>{if(!o.isMesh)return;const L=o.geometry.userData.lods;if(L)parts.push([o,[o.geometry,...L]]);else if(o.userData.eye)eyes.push(o)});g.userData.plod={parts,eyes,near,far,lv:-1,quills:null};PLOD.add(g);return g}
+function partsLOD(){
+  const c=GL.cam.position,zk=Math.tan(GL.cam.fov*Math.PI/360)/Math.tan(36*Math.PI/180),q=Q.tier==='low'?.75:Q.tier==='high'?1.2:1;
+  for(const g of PLOD){if(!g.parent){PLOD.delete(g);continue}const L=g.userData.plod,P=g.parent===GL.scene?g.position:_plv.setFromMatrixPosition(g.matrixWorld),d=P.distanceTo(c)*zk/q,lv=d<L.near?0:d<L.far?1:2;
+    if(lv===L.lv)continue;L.lv=lv;for(const [m,gs] of L.parts)m.geometry=gs[Math.min(lv,gs.length-1)];for(const m of L.eyes)m.visible=lv<2;
+    if(L.quills)L.quills.count=lv===0?L.quills.instanceMatrix.count:lv===1?700:260}
+}
 /* build every body during loading and draw each once so no shader compiles mid-game */
 function prebuildCreatures(){for(const k of['wolf','bear','moose'])rigData(k);antlerGeo();grouseParts();duckParts(true);duckParts(false);loonParts();fishParts();porcParts()}
 function warmCreatures(){const grp=new THREE.Group(),list=[makeBeastModel('wolf'),makeBeastModel('bear'),makeMooseModel(),makeBirdModel(),makeDuckModel(true),makeLoon(),makeFishModel(),makePorcupine()];
   list.forEach((m,i)=>{m.position.set(pl.x+Math.sin(pl.yaw)*6+i*.3,-40,pl.z+Math.cos(pl.yaw)*6);m.traverse(o=>{o.frustumCulled=false});grp.add(m)});GL.scene.add(grp);
-  try{GL.ren.compile(GL.scene,GL.cam)}catch(e){}GL.scene.remove(grp)}
+  const lf=[];for(const k in LF.sp)for(const L of LF.sp[k].lv)if(!L.im.visible){L.im.visible=true;lf.push(L.im)}   // the lake fish too, though none are in view yet
+  try{GL.ren.compile(GL.scene,GL.cam)}catch(e){}GL.scene.remove(grp);list.forEach(m=>PLOD.delete(m));lf.forEach(m=>{m.visible=false})}
 /* eyes, antlers and the like are rigid pieces carried by a bone */
 function rigAttach(rig,bone,obj,worldPos){const b=rig.bones[bone];const bp=new THREE.Vector3();const D=RIGS[rig.kind];const rp=D.B.find(q=>q[0]===bone)[2];obj.position.set(worldPos[0]-rp[0],worldPos[1]-rp[1],worldPos[2]-rp[2]);b.add(obj);return obj}
 let GLOWTEX=null;
@@ -6370,17 +6522,24 @@ function birdMat(spot,o={}){
  diffuseColor.rgb*=.9+.2*vn3(r*150.);}`)};
   m.customProgramCacheKey=()=>'birdpat2';return m;
 }
-/* one smooth part: primitives in the part's own space -> geometry with colour and pattern weights */
-function birdPart(prims,min,max,hs,dress){
-  const net=sdfNets(prims,min,max,hs),{P,N}=net,nv=P.length/3,C=new Float32Array(nv*3),A=new Float32Array(nv*4),R=RNG(9);
+/* one smooth part: primitives in the part's own space -> geometry with colour and pattern weights.
+   It also carries coarser copies (geometry.userData.lods) for distant viewing: grown on a wider grid and puffed
+   out a little so thin pieces such as bills, fins and wing feathers do not break up. */
+function birdPart(prims,min,max,hs,dress,lods=[2,3.6]){
+  const g=birdNet(prims,min,max,hs,0,dress);
+  g.userData.lods=lods.map(k=>{const h=hs*k,o=h*.3,m=o+h;return birdNet(prims,[min[0]-m,min[1]-m,min[2]-m],[max[0]+m,max[1]+m,max[2]+m],h,o,dress)});
+  return g;
+}
+function birdNet(prims,min,max,hs,off,dress){
+  const net=sdfNets(prims,min,max,hs,off),{P,N}=net,nv=P.length/3,C=new Float32Array(nv*3),A=new Float32Array(nv*4),R=RNG(9);
   for(let v=0;v<nv;v++){const x=P[v*3],y=P[v*3+1],z=P[v*3+2];let dm=1e9,tag='';for(const p of prims){const d=sdPrimX(p,x,y,z);if(d<dm){dm=d;tag=p.tag}}
     const o=dress(x,y,z,N[v*3],N[v*3+1],N[v*3+2],tag),c=o.c,j=1+(R()-.5)*.05;for(let k=0;k<3;k++)C[v*3+k]=Math.pow(c[k]*j,2.2);const pt=o.p||[0,0,0,0];for(let k=0;k<4;k++)A[v*4+k]=pt[k]}
   const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(P,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(N,3));g.setAttribute('color',new THREE.BufferAttribute(C,3));g.setAttribute('aPat',new THREE.BufferAttribute(A,4));g.setIndex(net.I);g.computeBoundingSphere();return g;
 }
-function mirrorZ(g){const m=g.clone(),p=m.attributes.position,n=m.attributes.normal;for(let i=0;i<p.count;i++){p.setZ(i,-p.getZ(i));n.setZ(i,-n.getZ(i))}const I=m.index.array;for(let t=0;t<I.length;t+=3){const a=I[t+1];I[t+1]=I[t+2];I[t+2]=a}m.computeBoundingSphere();return m}
+function mirrorZ(g){const m=g.clone(),p=m.attributes.position,n=m.attributes.normal;m.userData={};for(let i=0;i<p.count;i++){p.setZ(i,-p.getZ(i));n.setZ(i,-n.getZ(i))}const I=m.index.array;for(let t=0;t<I.length;t+=3){const a=I[t+1];I[t+1]=I[t+2];I[t+2]=a}m.computeBoundingSphere();if(g.userData.lods)m.userData.lods=g.userData.lods.map(mirrorZ);return m}
 const BP={cap:(p,a,b,r0,r1,k,tag)=>p.push(sdfCap(a,b,r0,r1,k,{tag})),ell:(p,c,r,k,tag)=>{const e=sdfEll(c,r,k);e.tag=tag;p.push(e)},oel:(p,c,r,ax,an,k,tag)=>{const e=sdfOEll(c,r,ax,an,k);e.tag=tag;p.push(e)}};
 const BIRDS={};
-function birdEyes(par,pts,r,col){const m=new THREE.MeshStandardMaterial({color:col||0x0a0806,roughness:.06,metalness:.1});for(const p of pts)for(const s of SIDE){const e=new THREE.Mesh(new THREE.SphereGeometry(r,10,8),m);e.position.set(p[0],p[1],p[2]*s);par.add(e)}}
+function birdEyes(par,pts,r,col){const m=new THREE.MeshStandardMaterial({color:col||0x0a0806,roughness:.06,metalness:.1});for(const p of pts)for(const s of SIDE){const e=new THREE.Mesh(new THREE.SphereGeometry(r,10,8),m);e.position.set(p[0],p[1],p[2]*s);e.userData.eye=1;par.add(e)}}
 /* ---- the foolbird: a male spruce grouse, plump and tame, barred grey above, black below, red comb ---- */
 function grouseParts(){
   if(BIRDS.grouse)return BIRDS.grouse;const {cap,ell,oel}=BP,b=[],h=[];
@@ -6409,7 +6568,7 @@ function makeBirdModel(){
   const P=grouseParts(),g=new THREE.Group(),body=new THREE.Mesh(P.body,P.mat);body.position.y=.2;g.add(body);
   const legs=SIDE.map(s=>{const l=new THREE.Mesh(P.leg,P.mat);l.position.set(.02,.1,.05*s);g.add(l);return l});
   const neck=new THREE.Group();neck.position.set(.17,.28,0);neck.add(new THREE.Mesh(P.head,P.mat));birdEyes(neck,[[.052,.125,.038]],.009);g.add(neck);
-  g.userData={neck,body,legs};g.traverse(m=>{if(m.isMesh)m.castShadow=true});return g;
+  g.userData={neck,body,legs};g.traverse(m=>{if(m.isMesh)m.castShadow=true});return lodPrep(g,6,18);
 }
 /* ---- mallards: the drake with his green head, white collar and chestnut breast; the mottled brown hen ---- */
 function duckParts(drake){
@@ -6436,11 +6595,11 @@ function duckParts(drake){
     if(drake){if(y>.06)return{c:mixc3([.07,.3,.15],[.05,.18,.12],sst(.6,-.2,ny)*.5),p:[0,0,0,-1]};if(y>.04)return{c:[.92,.92,.9]};return{c:C.breast}}
     const crown=sst(.165,.19,y),stripe=Math.exp(-Math.pow((y-.158)/.008,2))*sst(-.03,.02,x);
     return{c:mixc3(mixc3([.66,.54,.4],[.3,.22,.15],Math.max(crown,stripe)),[.72,.62,.48],sst(.12,.08,y)*.3),p:[0,0,.6*(1-stripe),0]}});
-  const handL=birdPart(wo,[-.26,-.04,-.05],[.04,.04,.34],.0055,(x,y,z,nx,ny,nz,t)=>ny<-.2?{c:[.78,.78,.76]}:t==='prim'?{c:drake?[.34,.31,.28]:[.38,.31,.24]}:{c:C.wing,p:[0,0,drake?0:.6,0]});
+  const handL=birdPart(wo,[-.26,-.04,-.05],[.04,.04,.34],.0055,(x,y,z,nx,ny,nz,t)=>ny<-.2?{c:[.78,.78,.76]}:t==='prim'?{c:drake?[.34,.31,.28]:[.38,.31,.24]}:{c:C.wing,p:[0,0,drake?0:.6,0]},[2]);
   const wingL=birdPart(w,[-.2,-.04,-.04],[.04,.04,.25],.0065,(x,y,z,nx,ny,nz,t)=>{
     if(ny<-.2)return{c:[.82,.82,.8],p:[0,0,0,0]};
     const sp=t==='inner'?sst(-.08,-.1,x)*sst(.02,.05,z)*sst(.21,.18,z):0,edge=t==='inner'?Math.exp(-Math.pow((x+.085)/.006,2))*sst(.02,.05,z)*sst(.21,.18,z):0;
-    return{c:mixc3(mixc3(C.wing,spec,sp),[.92,.92,.9],edge),p:[0,0,drake?0:.7*(1-sp),0]}});
+    return{c:mixc3(mixc3(C.wing,spec,sp),[.92,.92,.9],edge),p:[0,0,drake?0:.7*(1-sp),0]}},[2]);
   return BIRDS[key]={body,head,wingL,wingR:mirrorZ(wingL),handL,handR:mirrorZ(handL),mat:birdMat(40,{mot:44}),foot:new THREE.MeshStandardMaterial({color:new THREE.Color(0xe08a30).convertSRGBToLinear(),roughness:.7})};
 }
 function makeDuckModel(drake){
@@ -6449,7 +6608,7 @@ function makeDuckModel(drake){
   const wings=[];for(const s of SIDE){const w=new THREE.Group();w.position.set(.02,.19,s*.1);w.add(new THREE.Mesh(s>0?P.wingL:P.wingR,P.mat));
     const o=new THREE.Group();o.position.set(-.03,0,.21*s);o.add(new THREE.Mesh(s>0?P.handL:P.handR,P.mat));w.add(o);w.userData.s=s;w.userData.outer=o;w.visible=false;g.add(w);wings.push(w)}
   const feet=[];for(const s of SIDE){const f=new THREE.Mesh(new THREE.SphereGeometry(.035,8,6),P.foot);f.scale.set(1.2,.2,.9);f.position.set(-.06,.02,s*.05);f.visible=false;g.add(f);feet.push(f)}
-  g.userData={neck,wings,feet,body:bd};g.scale.setScalar(1.7);return g;
+  g.userData={neck,wings,feet,body:bd};g.scale.setScalar(1.7);return lodPrep(g,8,24);
 }
 /* ---- the common loon: black head with a green sheen, striped collar, checkered back, dagger bill, red eye ---- */
 function loonParts(){
@@ -6468,7 +6627,7 @@ function loonParts(){
   return BIRDS.loon={geo,mat:birdMat(24)};
 }
 function makeLoon(){
-  const P=loonParts(),g=new THREE.Group(),m=new THREE.Mesh(P.geo,P.mat);m.castShadow=true;g.add(m);birdEyes(g,[[.6,.45,.062]],.013,0x8a0e0a);return g;
+  const P=loonParts(),g=new THREE.Group(),m=new THREE.Mesh(P.geo,P.mat);m.castShadow=true;g.add(m);birdEyes(g,[[.6,.45,.062]],.013,0x8a0e0a);return lodPrep(g,10,30);
 }
 /* ---- a stream fish: olive back, barred golden sides, pale belly ---- */
 function fishParts(){
@@ -6482,7 +6641,7 @@ function fishParts(){
     return{c:t==='head'?mixc3(c,[.2,.22,.14],sst(.4,.9,ny)*.6):c,p:[0,sst(-.3,.3,ny)*sst(.9,.5,ny)*.8,0,0]}});
   return BIRDS.fish={geo,mat:birdMat(30,{bar:16})};
 }
-function makeFishModel(){const P=fishParts(),g=new THREE.Group(),m=new THREE.Mesh(P.geo,P.mat);g.add(m);birdEyes(g,[[.17,.01,.032]],.008,0x1a1408);return g}
+function makeFishModel(){const P=fishParts(),g=new THREE.Group(),m=new THREE.Mesh(P.geo,P.mat);g.add(m);birdEyes(g,[[.17,.01,.032]],.008,0x1a1408);return lodPrep(g,4,12)}
 /* ---- the porcupine: a low, arched, dark body bristling with pale, dark-tipped quills that lie back ---- */
 function porcParts(){
   if(BIRDS.porc)return BIRDS.porc;const {cap,ell,oel}=BP,p=[];
@@ -6508,7 +6667,7 @@ function porcParts(){
 function makePorcupine(){
   const P=porcParts(),g=new THREE.Group(),body=new THREE.Mesh(P.geo,P.mat);g.add(body);
   const im=new THREE.InstancedMesh(P.q,P.qmat,P.mats.length);P.mats.forEach((m,i)=>im.setMatrixAt(i,m));im.instanceMatrix.needsUpdate=true;g.add(im);
-  birdEyes(g,[[.38,.2,.062]],.012);g.traverse(o=>{if(o.isMesh)o.castShadow=true});return g;
+  birdEyes(g,[[.38,.2,.062]],.012);g.traverse(o=>{if(o.isMesh)o.castShadow=true});lodPrep(g,7,20);g.userData.plod.quills=im;return g;
 }
 /* ================= THE BOW: an ash stave, a shoelace string, fire-hardened willow arrows ================= */
 const ARW={list:[],cool:0,geo:null,mats:null,pickT:0};
@@ -6633,6 +6792,7 @@ function arrowsUpdate(dt){
         // fish only show where they seem to be: the real fish swims deeper than its image
         if(a.water){for(const f of fish){if(f.ax===undefined)continue;if(Math.hypot(P.x-f.ax,P.z-f.az)<.3&&Math.abs(P.y-f.ay)<.14){S.inv.fish++;S.stats.fish++;Snd.splash();toast(S.fl.arrowFish?'Another fish!':'You got a fish with an arrow! Aiming below it was the trick.',3.6);S.fl.arrowFish=1;f.t=Math.random();removeArrow(a);S.inv.arrows++;hitT=true;break}
             if(!a.lesson&&Math.hypot(P.x-f.ax,P.z-f.az)<2.2){a.lesson=true;if(!S.fl.refraction){S.fl.refraction=1;after(.6,()=>toast('Missed. The water bends the light: the fish is deeper than it looks. Aim lower.',5))}}}
+          if(!hitT&&lakeFishHit(P)){removeArrow(a);S.inv.arrows++;hitT=true}
           if(hitT)break;
           if(a.vel.length()<1.2||P.y<gh(P.x,P.z)+.05){a.on=false;a.sunk=true;a.t=0;break}continue}
         // trees and rocks
@@ -6652,6 +6812,396 @@ function arrowsUpdate(dt){
       else if(a.t>300)removeArrow(a);
     }
   }
+}
+/* ================= DIVING: swim down into the sunken plane for the med kit =================
+   After the storm the plane lies nose-down in a hollow of the lake bed with its tail out of the water. The door on
+   Brian's side is gone, so the cabin can be entered underwater. Look down and swim (or hold C / DIVE) to go under,
+   SPACE / JUMP to rise, click (STROKE) for a strong breaststroke. One breath lasts about twenty seconds, the kit is
+   wedged in the baggage space behind the folded back seat, and its strap only gives to well-timed pulls. */
+const DIVE={hy:0,vx:0,vy:0,vz:0,cab:false,held:false,strap:0,bub:0,silt:0,u:0,murk:0,inv:new THREE.Matrix4(),M:new THREE.Matrix4(),warn:0};
+const SWIM={ph:0,t:0,cd:0,k:0,amp:0};          // arm cycle, power-stroke timer, cooldown
+const KIT={zone:.5,w:.2,miss:0,fl:0};          // the strap: a moving marker must be caught inside the green band
+const AIR_S=22;
+const canSwim=()=>true;   // any water deep enough to float in can be swum, in every mode
+/* ---- the wreck's cabin: a doorway cut in the skin, an inner lining, seats, panel and the med kit ---- */
+function buildWreckCabin(){
+  const w=WORLD.wreck,cab=w.userData.fus,skins=cab.children.filter(m=>m.isMesh&&m.geometry.index&&m.geometry.attributes.uv);
+  const lin=new THREE.MeshStandardMaterial({color:new THREE.Color(0x6f6a58).convertSRGBToLinear(),emissive:new THREE.Color(0x0c0d0a),roughness:.95,side:THREE.BackSide});
+  for(const m of skins){const g=m.geometry,pa=g.attributes.position,I=g.index.array,keep=[];
+    for(let t=0;t<I.length;t+=3){let cx=0,cy=0,cz=0;for(let k=0;k<3;k++){cx+=pa.getX(I[t+k]);cy+=pa.getY(I[t+k]);cz+=pa.getZ(I[t+k])}cx/=3;cy/=3;cz/=3;
+      if(cz>.3&&cx>.6&&cx<1.32&&cy>-.06&&cy<1.5)continue;keep.push(I[t],I[t+1],I[t+2])}
+    const ng=g.clone();ng.setIndex(keep);m.geometry=ng;const inner=new THREE.Mesh(ng,lin);cab.add(inner)}
+  w.userData.glass.forEach(m=>{if(m.position.z>0&&m.geometry.type==='ShapeGeometry'){const p=m.geometry.attributes.position;let x=0;for(let i=0;i<p.count;i++)x+=p.getX(i);if(x/p.count>.4)m.visible=false}});   // the door window went with the door
+  // the right wing broke off a little way out in the crash, so the doorway beneath it is open to the water
+  for(const c of w.children.slice()){
+    if(c.isGroup&&Math.abs(c.position.y-1.665)<.01&&c.rotation.x<0){c.scale.z=.2;c.children.forEach(m=>{if(m.material&&m.material.color&&m.material.color.r>m.material.color.g*1.6||m.geometry&&m.geometry.type==='SphereGeometry')m.visible=false})}
+    if(c.isMesh&&c.position.z>.5&&(c.geometry.type==='CylinderGeometry'&&c.position.y>.5||c.geometry.type==='SphereGeometry'&&c.position.y>1))c.visible=false}
+  const G=new THREE.Group();w.add(G);
+  const mt=(c,r=.9,e=.08)=>{const col=new THREE.Color(c).convertSRGBToLinear();return new THREE.MeshStandardMaterial({color:col,emissive:col.clone().multiplyScalar(e),roughness:r})};
+  const box=(sx,sy,sz,m,x,y,z,rx=0,ry=0,rz=0)=>{const b=new THREE.Mesh(new THREE.BoxGeometry(sx,sy,sz),m);b.position.set(x,y,z);b.rotation.set(rx,ry,rz);G.add(b);return b};
+  const floor=mt(0x3c3f3a),fab=mt(0x5e5a4c),dark=mt(0x1d1f20,.8,.12),metal=new THREE.MeshStandardMaterial({color:0x8a9094,metalness:.7,roughness:.45,emissive:0x101214});
+  box(3.0,.04,1.5,floor,-.2,.0,0);box(.05,1.55,1.5,lin.clone(),-1.65,.75,0).material.side=THREE.FrontSide;   // floor and the bulkhead behind the baggage space
+  box(.05,1.0,1.5,dark,1.42,.45,0);box(.4,.08,1.48,dark,1.18,.98,0);box(.05,.42,1.44,dark,1.0,.74,0,0,0,.18);   // firewall, glare shield, panel
+  for(let i=0;i<5;i++){const d=new THREE.Mesh(new THREE.CircleGeometry(.07,16),mt(0x0c0d0e,.4,.05));d.position.set(.97,.78,-.5+i*.25);d.rotation.y=-Math.PI/2;d.rotateX(-.18);G.add(d)}
+  const seat=(x,z,tilt)=>{const s=new THREE.Group();s.position.set(x,0,z);const b=new THREE.Mesh(new THREE.BoxGeometry(.5,.12,.46),fab);b.position.set(.04,.36,0);const k=new THREE.Mesh(new THREE.BoxGeometry(.1,.66,.46),fab);k.position.set(-.26,.72,0);k.rotation.z=tilt;s.add(b,k);
+    const leg=new THREE.Mesh(new THREE.BoxGeometry(.4,.3,.04),metal);leg.position.set(.02,.16,0);s.add(leg);G.add(s);return s};
+  const bs=seat(.42,.32,.1);bs.rotation.set(.0,.5,1.35);bs.position.set(.5,.2,.32);seat(.12,-.4,.5);   // Brian's seat torn off its rails and lying across the floor; the pilot's knocked back
+  const bench=new THREE.Group();bench.position.set(-.95,0,0);{const b=new THREE.Mesh(new THREE.BoxGeometry(.5,.12,1.3),fab);b.position.set(.04,.36,0);const k=new THREE.Mesh(new THREE.BoxGeometry(.6,.1,1.3),fab);k.position.set(-.06,.47,0);k.rotation.z=-.08;bench.add(b,k)}G.add(bench);   // the back seat's backrest folded flat
+  for(const z of[.42,-.42]){const y=new THREE.Group();y.position.set(.92,.72,z);const c=new THREE.Mesh(new THREE.CylinderGeometry(.02,.02,.4,8),metal);c.rotation.z=Math.PI/2;c.position.x=-.18;const r=new THREE.Mesh(new THREE.TorusGeometry(.12,.014,8,18),dark);r.rotation.y=Math.PI/2;r.position.x=-.38;y.add(c,r);G.add(y)}
+  // loose things the crash threw about
+  box(.3,.2,.22,mt(0x4a3a2a),-1.42,.11,-.42,0,.6,0);box(.36,.14,.26,mt(0x39402c),-1.5,.4,-.1,.2,-.3,.4);box(.42,.06,.3,mt(0x6b6b5e),-.4,.04,.15,0,-.4,.05);
+  const weed=mt(0x2f4a22,1,.25);for(let i=0;i<14;i++){const h=.15+Math.random()*.35,s=new THREE.Mesh(new THREE.ConeGeometry(.03,h,4),weed);s.position.set(-1.5+Math.random()*2.6,.02+h/2,(Math.random()-.5)*1.3);s.rotation.set((Math.random()-.5)*.6,0,(Math.random()-.5)*.6);G.add(s)}
+  // the med kit: a red case with a white cross, belted down in the baggage space behind the back seat
+  const kit=new THREE.Group();kit.position.set(-1.42,.18,.12);kit.rotation.set(0,.25,-.35);
+  const red=new THREE.MeshStandardMaterial({color:new THREE.Color(0xc0281e).convertSRGBToLinear(),emissive:new THREE.Color(0x2a0604),roughness:.45}),wht=new THREE.MeshStandardMaterial({color:0xf2f0ea,emissive:0x1a1a18,roughness:.5});
+  const body=new THREE.Mesh(new THREE.BoxGeometry(.24,.3,.44),red);kit.add(body);
+  for(const s of[1,-1]){const v=new THREE.Mesh(new THREE.BoxGeometry(.006,.17,.05),wht),h=new THREE.Mesh(new THREE.BoxGeometry(.006,.05,.17),wht);v.position.x=h.position.x=s*.123;kit.add(v,h)}
+  const handle=new THREE.Mesh(new THREE.TorusGeometry(.06,.012,6,12,Math.PI),new THREE.MeshStandardMaterial({color:0x222222,roughness:.6}));handle.position.y=.15;handle.rotation.y=Math.PI/2;kit.add(handle);
+  const strap=new THREE.Mesh(new THREE.BoxGeometry(.27,.33,.05),new THREE.MeshStandardMaterial({color:0x2d3320,emissive:0x080a06,roughness:.9}));strap.position.z=.08;kit.add(strap);
+  G.add(kit);G.traverse(o=>{if(o.isMesh){o.castShadow=false;o.receiveShadow=true}});
+  WORLD.wreckCab={G,kit,strap,body};
+}
+/* ---- swimming under water ---- */
+function diveStart(){
+  const wd=waterDepthAt(pl.x,pl.z),surf=gh(pl.x,pl.z)+wd;if(wd<1.45)return false;
+  pl.dive=true;pl.swim=false;DIVE.hy=surf-.3;DIVE.vx=pl.vx*.6;DIVE.vz=pl.vz*.6;DIVE.vy=-1.4;DIVE.cab=false;DIVE.bub=1.5;Snd.splash();
+  burst(pl.x,surf+.02,pl.z,10,1.6,.6,.08,[.85,.93,.97],false,-6,1.2);
+  if(!S.fl.diveTip){S.fl.diveTip=1;toast(TOUCH?'Swim where you look. STROKE for a strong stroke, JUMP to rise, DODGE to go deeper. Watch your air.':'Swim where you look. Click for a strong stroke, SPACE to rise, C to go deeper. Watch your air.',6)}
+  return true;
+}
+function diveSurface(surf){
+  pl.dive=false;pl.swim=true;pl.y=surf-.95;pl.vy=0;pl.on=true;DIVE.cab=false;Snd.splash();Snd.tone(320,.25,'sine',.05,180);
+  burst(pl.x,surf+.02,pl.z,8,1.4,.6,.08,[.85,.93,.97],false,-6,1.2);
+  if(S.breath<.35)toast('Air! Brian gulps it down, gasping.',2.2);
+  if(DIVE.held){DIVE.held=false;S.inv.pack=1;S.inv.elt=1;S.inv.medkit=1;Snd.good();toast('You bring the med kit up. Swim back to shore with it.',4)}
+}
+function diveMove(dt,fw,st){
+  const cy=Math.cos(pl.pitch),f=V3(-Math.sin(pl.yaw)*cy,Math.sin(pl.pitch),-Math.cos(pl.yaw)*cy),r=rightV(),up=(isDown('jump')?1:0)-(isDown('dodge')?1:0);
+  const spd=(isDown('run')?1.9:1.3)*(DIVE.held?.72:1)*(S.breath<=0?.6:1);
+  const wx=f.x*fw+r.x*st,wy=f.y*fw+up,wz=f.z*fw+r.z*st,k=1-Math.exp(-1.5*dt);
+  const lift=DIVE.held?-.35:.28;   // lungs full of air drift you up; the heavy kit drags you down
+  DIVE.vx=lerp(DIVE.vx,wx*spd,k);DIVE.vz=lerp(DIVE.vz,wz*spd,k);DIVE.vy=lerp(DIVE.vy,wy*spd+(Math.abs(wy)<.05?lift:0),k);
+  swimPush(dt,f,true);
+  let x=pl.x+DIVE.vx*dt,z=pl.z+DIVE.vz*dt,y=DIVE.hy+DIVE.vy*dt;
+  if(areaOut(x,z)>areaOut(pl.x,pl.z)){x=pl.x;z=pl.z;DIVE.vx*=-.3;DIVE.vz*=-.3}   // the same edges as on the surface: no slipping out of a chapter's area under water
+  const p=wreckCollide(V3(x,y,z));x=p.x;y=p.y;z=p.z;
+  const g=gh(x,z);if(y<g+.32){y=g+.32;if(DIVE.vy<-.3||pl.sp>.8)stirSilt(x,y-.25,z);DIVE.vy=Math.max(0,DIVE.vy)}
+  if(DIVE.floor){DIVE.floor=0;if(pl.sp>.6||DIVE.vy<-.3)stirSilt(x,y-.25,z)}
+  const wd=waterDepthAt(x,z),surf=g+wd;
+  pl.x=x;pl.z=z;DIVE.hy=y;pl.y=y-EYE;pl.vx=DIVE.vx;pl.vz=DIVE.vz;pl.sp=Math.hypot(DIVE.vx,DIVE.vz);pl.on=true;pl.wade=1;
+  if(y>surf-.12||wd<1.0){if(wd<1.05){pl.dive=false;pl.swim=false;pl.y=g;if(DIVE.held)diveSurface(surf);return}diveSurface(surf);return}
+  // air
+  S.breath=Math.max(0,S.breath-dt/(isDown('run')?AIR_S*.68:AIR_S));DIVE.murk=Math.max(0,DIVE.murk-dt*.22);
+  if(S.breath<=0){hurt(9*dt,true);DIVE.warn-=dt;if(DIVE.warn<=0){DIVE.warn=1.2;pl.hurtFlash=1;Snd.hurt();camS.shake=.3}}
+  else if(S.breath<.3){DIVE.warn-=dt;if(DIVE.warn<=0){DIVE.warn=2.4;toast('Your lungs are burning. Get to the surface!',2)}}
+  // bubbles from the mouth, a trail when kicking hard, silt hanging in the water
+  const hx=pl.x+f.x*.25,hz=pl.z+f.z*.25;DIVE.bub-=dt;
+  if(DIVE.bub<=0){DIVE.bub=S.breath<.3?.7:1.6+Math.random()*1.4;for(let i=0;i<5+(S.breath<.3?6:0);i++)PSN.spawn(hx+rnd(-.05,.05),y-.12,hz+rnd(-.05,.05),rnd(-.1,.1),rnd(.6,1.1),rnd(-.1,.1),rnd(1.2,2.2),rnd(.012,.03),[.85,.93,.97],2.2,0,.75);Snd.tone(900+Math.random()*500,.05,'sine',.02,1500)}
+  if(pl.sp>1.4&&Math.random()<dt*10)PSN.spawn(pl.x-f.x*.4+rnd(-.2,.2),y-.4,pl.z-f.z*.4+rnd(-.2,.2),rnd(-.1,.1),rnd(.3,.7),rnd(-.1,.1),rnd(1,1.8),rnd(.01,.02),[.85,.93,.97],1.8,0,.6);
+  DIVE.silt-=dt;if(DIVE.silt<=0){DIVE.silt=.05;PSN.spawn(pl.x+rnd(-3,3),y+rnd(-1.5,1.5),pl.z+rnd(-3,3),rnd(-.05,.05),rnd(-.03,.03),rnd(-.05,.05),rnd(3,5),rnd(.006,.014),[.5,.55,.42],0,0,.55)}
+}
+/* collision with the sunken plane, worked out in the plane's own frame: you can only get into the cabin through the doorway */
+const CAB_BOX=[[.2,.78,0,.42,.02,.62],[-1.22,-.66,0,.55,-.66,.66]];   // the seat lying across the floor, the folded back seat
+const WRK_BOX=[[1.45,3.55,-.2,1.0,-.68,.68],[-4.9,-2.0,.25,1.42,-.45,.45],[-.53,1.13,1.6,1.84,-6,1.25],[-4.97,-2.9,1.06,2.66,-.07,.07],[-4.92,-3.74,.98,1.08,-2.2,2.2]];
+function wreckCollide(P){
+  const w=WORLD.wreck;if(!w)return P;w.updateMatrixWorld();DIVE.M.copy(w.matrixWorld);DIVE.inv.copy(DIVE.M).invert();
+  const p=P.clone().applyMatrix4(DIVE.inv),r=.28;
+  const door=q=>S.planeUp&&q.x>.66&&q.x<1.18&&q.y>.14&&q.y<1.3;   // before the storm moves it, the wreck lies nose-down with its cabin jammed shut
+  if(DIVE.cab){p.x=clamp(p.x,-1.62+r,p.z>.3&&p.y>.14&&p.y<1.3?1.1:.95-r);const y0=p.y;p.y=clamp(p.y,.02+r,1.56-r);if(p.y>y0)DIVE.floor=1;p.z=Math.max(p.z,-.74+r);if(!door(p))p.z=Math.min(p.z,.74-r);if(p.z>.86)DIVE.cab=false;
+    for(const [a0,a1,b0,b1,c0,c1] of CAB_BOX){const cx=clamp(p.x,a0,a1),cy=clamp(p.y,b0,b1),cz=clamp(p.z,c0,c1),dx=p.x-cx,dy=p.y-cy,dz=p.z-cz,d=Math.hypot(dx,dy,dz);if(d<r){if(d>1e-4){const k=r/d;p.x=cx+dx*k;p.y=cy+dy*k;p.z=cz+dz*k}else p.y=b1+r}}}
+  else{
+    const x0=-2.0-r,x1=1.45+r,y0=-.25-r,y1=1.62+r,z0=-.82-r,z1=.82+r;
+    if(p.x>x0&&p.x<x1&&p.y>y0&&p.y<y1&&p.z>z0&&p.z<z1){
+      if(door(p)&&p.z>.2){if(p.z<.74)DIVE.cab=true}
+      else{const pen=[[p.x-x0,0,-1],[x1-p.x,0,1],[p.y-y0,1,-1],[y1-p.y,1,1],[p.z-z0,2,-1],[z1-p.z,2,1]].sort((a,b)=>a[0]-b[0])[0];if(pen[1]===0)p.x=pen[2]<0?x0:x1;else if(pen[1]===1)p.y=pen[2]<0?y0:y1;else p.z=pen[2]<0?z0:z1}}
+    for(const [a0,a1,b0,b1,c0,c1] of WRK_BOX){const cx=clamp(p.x,a0,a1),cy=clamp(p.y,b0,b1),cz=clamp(p.z,c0,c1),dx=p.x-cx,dy=p.y-cy,dz=p.z-cz,d=Math.hypot(dx,dy,dz);
+      if(d<r){if(d>1e-4){const k=r/d;p.x=cx+dx*k;p.y=cy+dy*k;p.z=cz+dz*k}else p.y=b1+r}}
+  }
+  return p.applyMatrix4(DIVE.M);
+}
+/* the med kit: close enough, looking at it, then tug the strap loose */
+function kitWorld(){const K=WORLD.wreckCab;if(!K)return null;K.kit.updateMatrixWorld();return new THREE.Vector3().setFromMatrixPosition(K.kit.matrixWorld)}
+function diveIAs(){
+addIA({test:()=>{if(!pl.dive||DIVE.held||S.inv.pack||!WORLD.wreckCab||!S.planeUp)return false;const k=kitWorld(),c=GL.cam.position,d=k.distanceTo(c);if(d>1.1)return false;const f=new THREE.Vector3(0,0,-1).applyQuaternion(GL.cam.quaternion);return f.dot(k.clone().sub(c).normalize())>.6},
+  dive:true,pr:()=>'Pull the strap: time it in the green',pri:5,act:()=>{const m=kitMarker(),k=kitWorld(),n=S.fl.kitPulls|0;
+    if(Math.abs(m-KIT.zone)<KIT.w/2){S.fl.kitPulls=n+1;KIT.fl=1;camS.shake=.2;Snd.tone(150,.12,'triangle',.08,80);for(let i=0;i<6;i++)PSN.spawn(k.x+rnd(-.1,.1),k.y,k.z+rnd(-.1,.1),rnd(-.2,.2),rnd(.4,.8),rnd(-.2,.2),1.4,.02,[.85,.93,.97],2,0,.7);
+      if(S.fl.kitPulls>=3){DIVE.held=true;S.fl.kitPulls=0;Snd.pick();toast('The buckle tears free! You have the med kit. It is heavy: swim up hard.',4)}
+      else{KIT.zone=.2+Math.random()*.6;KIT.w=[.2,.15,.11][S.fl.kitPulls];toast(S.fl.kitPulls===1?'The strap gives a little. Again!':'Nearly! One more good pull.',1.8)}}
+    else{S.breath=Math.max(0,S.breath-.08);KIT.miss++;camS.shake=.12;Snd.bad();const c=GL.cam.position;for(let i=0;i<14;i++)PSN.spawn(c.x+rnd(-.08,.08),c.y-.1,c.z+rnd(-.08,.08),rnd(-.15,.15),rnd(.6,1.2),rnd(-.15,.15),rnd(1.2,2),rnd(.012,.03),[.85,.93,.97],2.2,0,.75);
+      if(KIT.miss===1||KIT.miss%4===0)toast('You yank at the wrong moment and lose air. Pull when the marker is in the green.',3)}}});
+  /* using it once you have it */
+addIA({test:()=>!!S.inv.medkit&&S.hp<70&&!pl.dive&&canAct(),pr:()=>'Use the med kit (+60 health)',pri:-50,act:()=>{S.inv.medkit=0;S.hp=Math.min(100,S.hp+60);Snd.good();pl.hurtFlash=0;toast('Bandages, antiseptic and a few painkillers. Brian feels steadier.',3)}});
+}
+function kitMarker(){const n=S.fl.kitPulls|0;return .5+.5*Math.sin(T*(2.4+n*.9))}
+function wreckCabUpdate(){const K=WORLD.wreckCab;if(!K)return;K.kit.visible=!S.inv.pack&&!DIVE.held;const n=S.fl.kitPulls|0;K.strap.scale.y=1-n*.18;KIT.fl=Math.max(0,KIT.fl-1/30);K.kit.position.y=.18+KIT.fl*.03}
+/* stirring up the silt on the lake bed or the cabin floor clouds the water for a while */
+function stirSilt(x,y,z){DIVE.murk=Math.min(1,DIVE.murk+.08);for(let i=0;i<3;i++)PSN.spawn(x+rnd(-.4,.4),y+rnd(0,.2),z+rnd(-.4,.4),rnd(-.3,.3),rnd(.05,.3),rnd(-.3,.3),rnd(3,5),rnd(.05,.12),[.36,.33,.24],0,0,.5)}
+/* ---- the swim stroke: hold forward to paddle; click / STROKE for a strong breaststroke that carries you ---- */
+function swimStroke(){if(SWIM.cd>0)return;SWIM.cd=.85;SWIM.t=1e-3;if(pl.dive){S.breath=Math.max(0,S.breath-.012)}else{Snd.splash()}Snd.whoosh()}
+function swimPush(dt,f,under){
+  SWIM.cd=Math.max(0,SWIM.cd-dt);const moving=Math.min(1,pl.sp/1.2);SWIM.amp=lerp(SWIM.amp,SWIM.t>0?1:moving*.55,1-Math.exp(-6*dt));
+  if(SWIM.t>0){const t0=SWIM.t;SWIM.t+=dt/.9;
+    if(t0<.42){const a=6.5*Math.sin(Math.PI*t0/.42)*(DIVE.held?.75:1);   // the pull: arms sweep out and back, the body surges forward
+      if(under){DIVE.vx+=f.x*a*dt;DIVE.vy+=f.y*a*dt;DIVE.vz+=f.z*a*dt}else{const h=Math.hypot(f.x,f.z)||1;pl.vx+=f.x/h*a*dt;pl.vz+=f.z/h*a*dt}}
+    if(SWIM.t>=1)SWIM.t=0;SWIM.ph=SWIM.t}
+  else SWIM.ph=(SWIM.ph+dt*(.25+.55*moving))%1;
+  if(!under&&SWIM.t>.05&&SWIM.t<.4&&Math.random()<dt*20){const c=GL.cam.position,fx=-Math.sin(pl.yaw),fz=-Math.cos(pl.yaw),s=Math.random()<.5?1:-1;PSN.spawn(c.x+fx*.5+fz*s*.4,gh(pl.x,pl.z)+waterDepthAt(pl.x,pl.z)+.03,c.z+fz*.5-fx*s*.4,rnd(-.4,.4),rnd(.4,1.1),rnd(-.4,.4),.6,.06,[.85,.93,.97],-6,0,.8)}
+}
+/* both arms in view doing the breaststroke: out, round, together under the chin, and forward */
+const SWK=[[.08,-.085,-.56,0],[.38,-.12,-.42,1.0],[.1,-.19,-.3,-.35],[.08,-.085,-.56,0]],_sw=new THREE.Vector3(),_sh=new THREE.Vector3();
+function swimVM(dt){
+  const R=VM.R,L=VM.L,u=SWIM.ph,seg=Math.min(2,Math.floor(u<.42?0:u<.62?1:2)),t0=[0,.42,.62][seg],t1=[.42,.62,1][seg],k=(u-t0)/(t1-t0),e=k*k*(3-2*k),A=SWK[seg],B=SWK[seg+1],amp=SWIM.amp,sink=pl.dive?0:-.05;
+  VM.hatchet.visible=false;VM.hold.visible=false;VM.ra.userData.idle.visible=true;VM.L.children[0].userData.idle.visible=true;if(VM.bow)VM.bow.g.visible=false;VM.L.children[0].rotation.set(0,0,0);
+  const kk=1-Math.exp(-16*dt);
+  for(const [G,s] of[[R,1],[L,-1]]){
+    const x=lerp(A[0],B[0],e),y=lerp(A[1],B[1],e),z=lerp(A[2],B[2],e),roll=lerp(A[3],B[3],e);
+    _sw.set(lerp(SWK[0][0],x,amp)*s,lerp(SWK[0][1]-.06,y,amp)+sink+Math.sin(T*1.6)*.006,lerp(SWK[0][2]+.08,z,amp));G.position.lerp(_sw,kk);
+    _sh.set(.2*s,-.32,.3);G.lookAt(_sh);G.rotateZ(-roll*s)}
+  GL.vmCam.position.set(0,0,0);GL.vmCam.rotation.set(0,0,0);GL.vmCam.fov=GL.cam.fov*.82;GL.vmCam.updateProjectionMatrix();
+  const ld=ENVS.lightDir.clone();ld.applyEuler(new THREE.Euler(-GL.cam.rotation.x,-GL.cam.rotation.y,0,'XYZ'));GL.vmSun.position.copy(ld).multiplyScalar(6);
+}
+/* how the world looks and sounds from under the surface */
+const UW_FOG=new THREE.Color(.012,.046,.044);
+function diveEnv(){
+  const c=GL.cam.position,wd=waterDepthAt(c.x,c.z),surf=gh(c.x,c.z)+wd,under=scene==='play'&&wd>0&&c.y<surf-.03;
+  DIVE.u=under?1:0;
+  if(Snd.lp&&Snd.c){const want=under?520:22000;if(Snd.lpw!==want){Snd.lpw=want;Snd.lp.frequency.setTargetAtTime(want,Snd.c.currentTime,.08)}}
+  if(WORLD.sky)WORLD.sky.visible=!under;if(WORLD.ridge)WORLD.ridge.visible=!under;   // under water the murk, not the sky, fills the view
+  if(!under)return;
+  const deep=clamp((surf-c.y)/5,0,1),day=SKYE.dayK*.8+.2;
+  GL.scene.fog.color.copy(UW_FOG).multiplyScalar(day*(1-.5*deep)).lerp(new THREE.Color(.03,.028,.018),DIVE.murk*.6);GL.scene.fog.density=.085+.05*deep+.3*DIVE.murk;ENVS.fog.copy(GL.scene.fog.color);
+  for(const w of WORLD.waterMats){w.uniforms.fogColor.value.copy(GL.scene.fog.color);w.uniforms.fogDensity.value=GL.scene.fog.density*.25}
+  PE.tint.setRGB(.62,.98,.92);PE.sat=.78;PE.ex*=.86-.2*deep;PE.vig=.75;
+  Snd.set('wind',0);Snd.set('water',.28);Snd.set('cricket',0);Snd.set('rain',0);
+}
+/* ================= CHOPPING DOWN TREES =================
+   Every tree in the forest can be felled with the hatchet. Each swing at a trunk bites a little deeper (big trees
+   take more swings), the tree creaks, tips away from Brian and crashes down, leaving a stump and giving wood:
+   logs and branches, plus birch bark from birches. Saplings come down in one swing for a bundle of branches.
+   The trees you have felled are remembered in S.fl.felled, so a saved game keeps its clearings. */
+const NO_FELLED=[];   // one shared empty list, so an untouched forest is not re-synced every frame
+const TREE={grid:new Map(),sig:null,fall:[],hud:0,hk:0,stumps:null,ready:false};
+const TREE_CELL=8,tkey=(x,z)=>Math.floor(x/TREE_CELL)+','+Math.floor(z/TREE_CELL);
+const treeNeed=t=>t.s<=.55?1:t.s>2?12:Math.round(2+t.s*3);   // swings to fell it
+const treeName=t=>t.s<=.55?'sapling':t.kind==='birch'?'birch':t.kind==='pine'?'pine':'spruce';
+function treesInit(){
+  VEG.items.forEach((t,i)=>{t.i=i;const k=tkey(t.x,t.z);let a=TREE.grid.get(k);if(!a)TREE.grid.set(k,a=[]);a.push(t)});
+  // stumps: one instanced cylinder, bark on the side and pale end grain on top
+  const sg=new THREE.CylinderGeometry(.82,1,1,12,1);sg.translate(0,.5,0);
+  const bark=new THREE.MeshStandardMaterial({map:TX.barkS,roughness:.95}),grain=new THREE.MeshStandardMaterial({map:TX.endgrain,roughness:.9});
+  const im=new THREE.InstancedMesh(sg,[bark,grain,grain],900);im.count=0;im.castShadow=true;im.receiveShadow=true;im.frustumCulled=false;GL.scene.add(im);TREE.stumps=im;
+  TREE.ready=true;treesSync(true);
+}
+/* the standing tree in front of Brian, within reach of a swing */
+function treeTarget(reach=1.65,cone=.55){
+  const f=fwdV(),cx=Math.floor(pl.x/TREE_CELL),cz=Math.floor(pl.z/TREE_CELL);let best=null,bd=1e9;
+  for(let a=-1;a<=1;a++)for(let b=-1;b<=1;b++){const l=TREE.grid.get((cx+a)+','+(cz+b));if(!l)continue;
+    for(const t of l){if(t.cut)continue;const dx=t.x-pl.x,dz=t.z-pl.z,d=Math.hypot(dx,dz),r=t.col?t.col.r:.15;if(d-r>reach||d<1e-3)continue;if((dx*f.x+dz*f.z)/d<cone)continue;if(d<bd){bd=d;best=t}}}
+  return best;
+}
+/* bring the world in line with S.fl.felled (a new game, a loaded save or a restarted chapter all change it) */
+function treesSync(force){
+  if(!TREE.ready)return;const list=S.fl&&S.fl.felled||NO_FELLED;  if(!force&&list===TREE.list&&list.length===TREE.len)return;TREE.list=list;TREE.len=list.length;
+  const set=new Set(list);
+  for(const t of VEG.items){const cut=set.has(t.i);if(cut===!!t.cut)continue;t.cut=cut;t.hits=0;
+    if(t.col){const k=ckey(Math.floor(t.col.x/CC),Math.floor(t.col.z/CC)),a=WORLD.cols.get(k);if(cut){if(a){const j=a.indexOf(t.col);if(j>=0)a.splice(j,1)}}else if(a&&a.indexOf(t.col)<0)a.push(t.col)}}
+  // stumps for every felled tree that had a trunk worth leaving
+  const m=new THREE.Matrix4(),q=new THREE.Quaternion();let n=0;
+  for(const i of list){const t=VEG.items[i];if(!t||t.s<=.55||n>=900)continue;const r=.17*t.s,h=.32+.1*t.s;q.setFromAxisAngle(V3(0,1,0),t.i*1.7);m.compose(V3(t.x,t.y-.06,t.z),q,V3(r,h,r));TREE.stumps.setMatrixAt(n++,m)}
+  TREE.stumps.count=n;TREE.stumps.instanceMatrix.needsUpdate=true;
+  VEG.px=1e9;lodUpdate(pl.x,pl.z,true);
+}
+/* a swing that lands on a tree */
+function treeHit(t){
+  t.hits=(t.hits||0)+1;const need=treeNeed(t),y=gh(t.x,t.z)+.9;Snd.chop();camS.shake=.12;TREE.hud=1.6;TREE.hk=t.hits/need;TREE.ht=t;
+  chips(t.x-(t.x-pl.x)*.25,y,t.z-(t.z-pl.z)*.25,8+t.hits,t.kind==='birch'?[.9,.88,.8]:[.8,.66,.45]);t.shake=1;
+  if(t.hits>=need)treeFell(t);
+  else if(t.hits===1&&need>2&&!S.fl.chopTip){S.fl.chopTip=1;toast(`It will take about ${need} swings to bring this ${treeName(t)} down. Keep chopping!`,3)}
+}
+function treeFell(t){
+  if(!S.fl.felled)S.fl.felled=[];S.fl.felled.push(t.i);treesSync();   // marks it cut, takes its trunk out of the way and leaves a stump
+  if(t.s<=.55){S.inv.branches=(S.inv.branches|0)+1;Snd.pick();burst(t.x,t.y+.5,t.z,10,1.6,.6,.06,[.3,.45,.22],false,-6,1.2);toast('Sapling down: +1 bundle of branches',2.4);return}
+  // the trunk tips away from Brian, slowly at first, then crashes down
+  const e=VEG.near[t.kind][t.v],dir=V3(t.x-pl.x,0,t.z-pl.z).normalize(),axis=V3(dir.z,0,-dir.x),fm=new THREE.InstancedMesh(e.f.geometry,e.f.material,1),tm=new THREE.InstancedMesh(e.t.geometry,e.t.material,1);
+  for(const m of[fm,tm]){m.instanceColor=new THREE.InstancedBufferAttribute(new Float32Array([t.c.r,t.c.g,t.c.b]),3);m.frustumCulled=false;m.castShadow=true;m.receiveShadow=true;GL.scene.add(m)}
+  fm.customDepthMaterial=e.f.customDepthMaterial;
+  TREE.fall.push({t,fm,tm,axis,dir,a:0,age:0,landed:false,base:V3(t.x,t.y-.08,t.z),H:e.H*t.s});
+  Snd.creak();after(.5,()=>Snd.creak());
+}
+const _tq=new THREE.Quaternion(),_tm=new THREE.Matrix4(),_tm2=new THREE.Matrix4();
+function treesUpdate(dt){
+  if(!TREE.ready)return;treesSync();TREE.hud=Math.max(0,TREE.hud-dt);
+  for(let i=TREE.fall.length-1;i>=0;i--){const F=TREE.fall[i];F.age+=dt;const T1=1.5,top=Math.PI/2-.07;
+    if(F.age<T1){const k=F.age/T1;F.a=top*k*k}
+    else{if(!F.landed){F.landed=true;treeLanded(F)}const b=F.age-T1;F.a=top-.06*Math.exp(-b*5)*Math.abs(Math.sin(b*14))}
+    const sink=F.age>9?Math.min(.9,(F.age-9)*.6):0;
+    _tq.setFromAxisAngle(F.axis,F.a);_tm.makeRotationFromQuaternion(_tq);_tm.setPosition(F.base.x,F.base.y-sink,F.base.z);_tm2.makeTranslation(-F.base.x,-F.base.y,-F.base.z).premultiply(_tm).multiply(F.t.m);
+    F.fm.setMatrixAt(0,_tm2);F.tm.setMatrixAt(0,_tm2);F.fm.instanceMatrix.needsUpdate=F.tm.instanceMatrix.needsUpdate=true;
+    if(F.age>10.5){GL.scene.remove(F.fm);GL.scene.remove(F.tm);TREE.fall.splice(i,1)}}
+  // a tree that was just hit shudders
+  for(const t of VEG.items){if(!t.shake)continue;t.shake=Math.max(0,t.shake-dt*3);const s=t.slot;if(!s||t.cut){t.shake=0;continue}
+    const w=Math.sin(t.shake*28)*.03*t.shake;_tq.setFromAxisAngle(V3(1,0,0),w);_tm.makeRotationFromQuaternion(_tq);_tm.setPosition(t.x,t.y,t.z);_tm2.makeTranslation(-t.x,-t.y,-t.z).premultiply(_tm).multiply(t.m);
+    s.e.f.setMatrixAt(s.i,_tm2);s.e.t.setMatrixAt(s.i,_tm2);s.e.f.instanceMatrix.needsUpdate=s.e.t.instanceMatrix.needsUpdate=true}
+}
+function treeLanded(F){
+  const t=F.t,d=Math.hypot(t.x-pl.x,t.z-pl.z);Snd.thud();Snd.noise(.6,700,.35);if(d<30)camS.shake=Math.max(camS.shake,.5*(1-d/30));
+  for(let k=0;k<5;k++){const r=F.H*(.3+k*.15),x=t.x+F.dir.x*r,z=t.z+F.dir.z*r;burst(x,gh(x,z)+.4,z,8,2.2,.7,.08,t.kind==='birch'?[.45,.55,.25]:[.22,.34,.18],false,-5,1.2)}
+  const logs=t.s>2?6:t.s>1.15?3:2;S.inv.wood=(S.inv.wood|0)+logs;S.inv.branches=(S.inv.branches|0)+1;let extra='';
+  if(t.kind==='birch'){S.inv.tinder=(S.inv.tinder|0)+1;extra=', +1 birch bark'}
+  S.stats.trees=(S.stats.trees|0)+1;Snd.pick();toast(`Timber! +${logs} logs, +1 bundle of branches${extra}`,3);
+}
+/* the prompt that tells you the hatchet can take a tree down */
+function treeIAs(){
+  addIA({test:()=>pl.hasH&&!pl.dive&&!pl.swim&&(S.weapon||'hatchet')==='hatchet'&&!!treeTarget(1.3,.8),pri:-10,pr:()=>{const t=treeTarget(1.3,.8);return t?`Chop down the ${treeName(t)} (${TOUCH?'tap AXE':'click'})`:null},act:()=>swingHatchet()});
+}
+/* ================= FISH IN THE LAKE =================
+   Schools of yellow perch in the weedy shallows, golden walleye and silver whitefish in the middle water, big lake
+   trout down deep, and northern pike: long, green, ambush hunters that stalk anyone swimming near them and bite.
+   Every species is one instanced, smooth body whose tail beats in the vertex shader, so a lakeful costs a handful
+   of draw calls. Any of them can be shot with an arrow from the shore or the shallows. */
+const LF={list:[],sp:{},ready:false,warnT:0,biteN:0};
+/* each body is modelled at length 1 (head toward +x, tail toward -x) and scaled to the fish's real size */
+const FISH_SP={
+  perch:{L:[.18,.3],groups:5,per:[6,9],band:[.7,4],spd:.45,flee:3.5,food:1,name:'yellow perch',spot:14,o:{bar:9,mot:30}},
+  walleye:{L:[.38,.6],groups:4,per:[2,4],band:[2.5,8],spd:.55,flee:4.5,food:2,name:'walleye',spot:14,o:{bar:12,mot:22}},
+  whitefish:{L:[.32,.5],groups:3,per:[5,7],band:[3,10],spd:.6,flee:5,food:1,name:'whitefish',spot:14,o:{bar:12,mot:30}},
+  trout:{L:[.6,.95],groups:6,per:[1,2],band:[6,13],spd:.6,flee:5,food:2,name:'lake trout',spot:26,o:{sq:0,mot:26}},
+  pike:{L:[.75,1.25],groups:5,per:[1,1],band:[1.5,5.5],spd:.5,flee:0,food:3,name:'northern pike',spot:17,o:{sq:0,mot:18}}
+};
+function fishBody(kind){
+  const {cap,ell,oel}=BP,p=[],fin=(c,r,ang,tag='fin')=>oel(p,c,[r[0],r[1],r[2]??.011],[0,0,1],ang,.012,tag);   // fins are thin plates
+  const tail=(x,h,len)=>{fin([x,.035*h/.1,0],[len,.022,.011],.55,'tail');fin([x,-.035*h/.1,0],[len,.022,.011],-.55,'tail')};
+  if(kind==='perch'){oel(p,[0,0,0],[.36,.15,.08],[0,0,1],0,.04,'body');oel(p,[.04,.07,0],[.22,.1,.065],[0,0,1],-.1,.05,'body');ell(p,[.3,-.01,0],[.15,.11,.075],.05,'head');
+    cap(p,[-.22,.01,0],[-.42,.01,0],.07,.035,.04,'body');tail(-.48,.12,.09);fin([.07,.17,0],[.14,.055],.05,'dfin');fin([-.17,.14,0],[.1,.045],-.1,'fin');fin([-.15,-.13,0],[.07,.04],.15,'afin');
+    for(const s of SIDE){oel(p,[.12,-.12,.05*s],[.06,.02,.025],[0,1,0],s*.4,.01,'afin');oel(p,[.2,-.03,.075*s],[.06,.022,.02],[0,1,0],s*.6,.01,'fin')}}
+  else if(kind==='walleye'){oel(p,[0,0,0],[.36,.1,.07],[0,0,1],0,.04,'body');ell(p,[.3,0,0],[.16,.085,.066],.05,'head');cap(p,[.36,-.035,0],[.46,-.03,0],.035,.02,.03,'head');
+    cap(p,[-.22,.0,0],[-.42,.005,0],.055,.028,.04,'body');tail(-.48,.1,.09);fin([.08,.12,0],[.14,.05],.05,'dfin');fin([-.17,.1,0],[.11,.045],-.12,'fin');fin([-.16,-.1,0],[.07,.04],.15,'fin');
+    for(const s of SIDE){oel(p,[.12,-.09,.04*s],[.06,.02,.025],[0,1,0],s*.4,.01,'fin');oel(p,[.2,-.03,.068*s],[.06,.022,.02],[0,1,0],s*.6,.01,'fin')}}
+  else if(kind==='whitefish'){oel(p,[0,.01,0],[.38,.13,.07],[0,0,1],0,.04,'body');ell(p,[.33,-.01,0],[.11,.08,.06],.05,'head');
+    cap(p,[-.22,.01,0],[-.42,.01,0],.06,.026,.04,'body');tail(-.48,.12,.1);fin([.0,.15,0],[.09,.06],.2,'fin');fin([-.28,.09,0],[.035,.02],0,'fin');fin([-.17,-.1,0],[.07,.035],.2,'fin');
+    for(const s of SIDE){oel(p,[.06,-.1,.04*s],[.06,.02,.025],[0,1,0],s*.4,.01,'fin');oel(p,[.24,-.04,.06*s],[.06,.022,.02],[0,1,0],s*.6,.01,'fin')}}
+  else if(kind==='trout'){oel(p,[0,0,0],[.38,.11,.075],[0,0,1],0,.04,'body');ell(p,[.31,0,0],[.15,.09,.07],.05,'head');cap(p,[.38,-.03,0],[.46,-.03,0],.04,.022,.03,'head');
+    cap(p,[-.22,.0,0],[-.42,.005,0],.06,.028,.04,'body');tail(-.47,.12,.11);fin([.02,.12,0],[.1,.06],.2,'fin');fin([-.28,.08,0],[.035,.02],0,'fin');fin([-.17,-.1,0],[.07,.04],.15,'lfin');
+    for(const s of SIDE){oel(p,[.07,-.1,.045*s],[.06,.02,.025],[0,1,0],s*.4,.01,'lfin');oel(p,[.22,-.04,.07*s],[.07,.024,.02],[0,1,0],s*.6,.01,'lfin')}}
+  else{ // pike: a long torpedo with a flat duck-bill snout and the dorsal and anal fins set far back by the tail
+    cap(p,[.28,0,0],[-.3,.005,0],.075,.062,.05,'body');oel(p,[-.02,-.02,0],[.3,.07,.06],[0,0,1],0,.04,'body');oel(p,[.36,0,0],[.12,.058,.058],[0,0,1],-.05,.04,'head');
+    oel(p,[.46,-.005,0],[.075,.02,.042],[0,0,1],0,.02,'snout');cap(p,[.33,-.042,0],[.52,-.03,0],.024,.012,.015,'jaw');
+    cap(p,[-.3,.005,0],[-.42,.01,0],.05,.026,.04,'body');tail(-.48,.1,.1);fin([-.28,.085,0],[.085,.05],-.15,'rfin');fin([-.27,-.075,0],[.08,.045],.15,'rfin');
+    for(const s of SIDE){oel(p,[-.05,-.07,.03*s],[.05,.018,.022],[0,1,0],s*.4,.01,'rfin');oel(p,[.24,-.045,.06*s],[.06,.02,.02],[0,1,0],s*.6,.01,'rfin')}}
+  // colours: back, flank and belly, the fins, and a gold-ringed eye painted on the head
+  const C={perch:{bk:[.3,.34,.13],fl:[.76,.66,.24],bl:[.92,.88,.76],fin:[.42,.38,.2]},walleye:{bk:[.34,.32,.15],fl:[.68,.58,.3],bl:[.9,.88,.8],fin:[.46,.4,.22]},
+    whitefish:{bk:[.38,.44,.48],fl:[.8,.82,.84],bl:[.94,.94,.92],fin:[.62,.64,.66]},trout:{bk:[.22,.27,.23],fl:[.46,.5,.45],bl:[.88,.86,.78],fin:[.5,.42,.32]},pike:{bk:[.11,.15,.07],fl:[.27,.34,.15],bl:[.86,.84,.7],fin:[.5,.3,.16]}}[kind];
+  const eye=kind==='pike'?[.4,.03,.05]:kind==='whitefish'?[.38,.02,.052]:kind==='perch'?[.37,.03,.07]:[.37,.025,.06],er=kind==='walleye'?.034:kind==='pike'?.022:.026;
+  return birdPart(p,[-.62,-.24,-.13],[.6,.26,.13],.0105,(x,y,z,nx,ny,nz,t)=>{
+    const de=Math.hypot(x-eye[0],y-eye[1],Math.abs(z)-eye[2]);
+    if(de<er)return{c:de<er*.62?(kind==='walleye'?[.62,.6,.5]:[.03,.03,.03]):kind==='walleye'?[.75,.72,.6]:[.8,.62,.2]};
+    if(t==='afin')return{c:[.85,.42,.14]};if(t==='lfin')return{c:[.74,.42,.26]};
+    if(t==='rfin')return{c:C.fin,p:[0,0,.8,0]};if(t==='dfin')return{c:C.fin,p:[0,0,.5,0]};
+    if(t==='tail'){let c=C.fin;if(kind==='walleye'&&y<-.03)c=mixc3(c,[.95,.95,.92],sst(-.06,-.09,y));return{c}}
+    if(t==='fin')return{c:C.fin};
+    if(t==='snout'||t==='jaw')return{c:mixc3(C.bk,C.bl,sst(-.01,-.04,y)),p:[0,0,.3,0]};
+    const up=sst(-.1,.75,ny),dn=sst(-.15,-.7,ny),c=mixc3(mixc3(C.fl,C.bk,up),C.bl,dn);
+    const pat={perch:[0,(1-dn)*.85,.2,0],walleye:[0,0,(1-dn)*.8,0],whitefish:[0,0,.1,0],trout:[(1-dn)*.9,0,.15,0],pike:[(1-dn)*.85*(1-up*.4),0,.15,0]}[kind];
+    return{c:t==='head'?mixc3(c,C.bk,sst(.3,.9,ny)*.4):c,p:pat}});
+}
+/* the scaled-pattern bird material with a tail beat added: aSwim = (phase, how hard it is swimming) */
+function fishMat(spot,o){
+  const m=birdMat(spot,o),ob=m.onBeforeCompile;
+  m.onBeforeCompile=sh=>{ob(sh);sh.uniforms.uFT=U_TIME;sh.fragmentShader=sh.fragmentShader.replace('vec2 g=vec2(r.x,r.z*.8+r.y*.5)*uSpot','vec2 g=vec2(r.x,r.y*2.4+r.z*.8)*uSpot');   // round spots on a slim body
+   sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nattribute vec2 aSwim;uniform float uFT;')
+    .replace('vRest=position;vPat=aPat;','vRest=position;vPat=aPat;{float k=pow(clamp((.24-position.x)/.72,0.,1.),1.4);transformed.z+=sin(uFT*(5.+9.*aSwim.y)+aSwim.x-position.x*6.5)*k*(.05+.1*aSwim.y);transformed.z+=sin(uFT*(5.+9.*aSwim.y)+aSwim.x+1.6)*.012*(1.-k);}')};
+  m.customProgramCacheKey=()=>'fishswim';return m;
+}
+const lakeT=(x,z)=>Math.hypot((x-LAKE.cx)/LAKE.rx,(z-LAKE.cz)/LAKE.rz);
+const fishDepth=(x,z)=>lakeT(x,z)<.985?-gh(x,z):0;
+/* where pike may not lurk: the wreck and the swim out to it, so the story dive stays fair */
+const pikeOK=(x,z)=>Math.hypot(x-SUNK.x,z-SUNK.z)>16&&distSeg(x,z,KEY.dive[0],KEY.dive[1],SUNK.x,SUNK.z)>14&&Math.hypot(x-KEY.spawn[0],z-KEY.spawn[1])>24&&Math.hypot(x-KEY.floatplane[0],z-KEY.floatplane[1])>24;   // nor by the rescue plane
+function distSeg(x,z,ax,az,bx,bz){const vx=bx-ax,vz=bz-az,t=clamp(((x-ax)*vx+(z-az)*vz)/(vx*vx+vz*vz),0,1);return Math.hypot(x-ax-vx*t,z-az-vz*t)}
+function fishSpot(sp,cx,cz,r,R){
+  for(let i=0;i<40;i++){const a=R()*TAU,d=Math.sqrt(R())*r,x=cx+Math.cos(a)*d,z=cz+Math.sin(a)*d,dep=fishDepth(x,z);
+    if(dep<sp.band[0]+.5)continue;if(sp===FISH_SP.pike&&!pikeOK(x,z))continue;const lo=Math.max(.35,sp.band[0]),hi=Math.min(dep-.45,sp.band[1]);if(hi<lo)continue;return[x,-(lo+(hi-lo)*R()),z]}
+  return null;
+}
+function buildLakeFish(){
+  const R=RNG(9191);
+  for(const kind in FISH_SP){const sp=FISH_SP[kind],geo=fishBody(kind),cap=sp.groups*sp.per[1]+2,mat=fishMat(sp.spot,sp.o);
+    // one instanced mesh per level of detail: the full body up close, coarser copies further out
+    const lv=[geo,...geo.userData.lods].map(g=>{g.setAttribute('aSwim',new THREE.InstancedBufferAttribute(new Float32Array(cap*2),2));
+      const im=new THREE.InstancedMesh(g,mat,cap);im.count=0;im.visible=false;im.frustumCulled=false;im.castShadow=false;im.receiveShadow=false;im.renderOrder=1;
+      im.instanceColor=new THREE.InstancedBufferAttribute(new Float32Array(cap*3).fill(1),3);GL.scene.add(im);return{im,geo:g,sw:g.attributes.aSwim,n:0}});
+    LF.sp[kind]={im:lv[0].im,geo,cap,lv};
+    for(let g=0;g<sp.groups;g++){let home=null;for(let k=0;k<60&&!home;k++){const s=fishSpot(sp,LAKE.cx,LAKE.cz,LAKE.rx*.92,R);if(s&&lakeT(s[0],s[2])<.95)home=s}
+      if(!home)continue;const n=sp.per[0]+Math.floor(R()*(sp.per[1]-sp.per[0]+1));let lead=null;
+      for(let i=0;i<n;i++){const f={kind,sp,x:home[0]+(R()-.5)*2,y:home[1],z:home[2]+(R()-.5)*2,vx:0,vy:0,vz:0,hx:home[0],hz:home[2],tx:home[0],ty:home[1],tz:home[2],t:0,size:sp.L[0]+(sp.L[1]-sp.L[0])*R(),ph:R()*TAU,
+        lead,off:[(R()-.5)*1.6,(R()-.5)*.6,(R()-.5)*1.6],state:'swim',flee:0,cd:0,tint:.85+R()*.3,dead:0};
+        if(!lead)lead=f;LF.list.push(f)}}}
+  LF.ready=true;
+}
+/* where the swimmer's body is, for the pike to aim at */
+function swimmerBody(){if(pl.dive)return V3(pl.x,DIVE.hy-.35,pl.z);return V3(pl.x,-.5,pl.z)}
+const inLakeWater=()=>(pl.swim||pl.dive)&&lakeT(pl.x,pl.z)<1.02&&!pl.dead&&!S.cut;
+const _fq=new THREE.Quaternion(),_fe=new THREE.Euler(0,0,0,'YZX'),_fm=new THREE.Matrix4(),_fv=new THREE.Vector3(),_fs=new THREE.Vector3(),_fc=new THREE.Color();
+function lakeFishUpdate(dt){
+  if(!LF.ready)return;LF.warnT=Math.max(0,LF.warnT-dt);
+  const cam=GL.cam.position,inW=inLakeWater(),body=inW?swimmerBody():null,camNear=lakeT(cam.x,cam.z)<1.4;
+  for(const f of LF.list){
+    if(f.dead){f.dead-=dt;if(f.dead<=0){const s=fishSpot(f.sp,f.hx,f.hz,18,Math.random);if(s){f.x=s[0];f.y=s[1];f.z=s[2];f.dead=0;f.state='swim'}else f.dead=5}continue}
+    const sp=f.sp;f.t-=dt;f.cd=Math.max(0,f.cd-dt);let spd=sp.spd,turn=1.6;
+    const dP=body?Math.hypot(body.x-f.x,body.y-f.y,body.z-f.z):1e9;
+    if(f.kind==='pike')spd=pikeThink(f,dt,body,dP);
+    else if(body&&dP<sp.flee&&f.flee<=0){f.flee=1.6+Math.random();const ax=f.x-body.x,az=f.z-body.z,l=Math.hypot(ax,az)||1;f.tx=f.x+ax/l*8;f.tz=f.z+az/l*8;f.ty=f.y-.4;f.t=2}
+    if(f.flee>0){f.flee-=dt;spd=sp.spd*4.5;turn=4}
+    else if(f.kind!=='pike'){
+      if(f.lead&&!f.lead.dead){const L=f.lead,ox=L.x+f.off[0]*Math.max(1,f.size*4),oz=L.z+f.off[2]*Math.max(1,f.size*4);f.tx=ox;f.ty=L.y+f.off[1];f.tz=oz;const dl=Math.hypot(ox-f.x,oz-f.z);spd=sp.spd*(dl>2?1.8:1);turn=2.2}
+      else if(f.t<=0||Math.hypot(f.tx-f.x,f.tz-f.z)<1){f.t=4+Math.random()*7;const s=fishSpot(sp,f.hx,f.hz,14,Math.random);if(s){f.tx=s[0];f.ty=s[1];f.tz=s[2]}}}
+    // steer toward the target, keep to deep enough water, away from the wreck, between the bed and the surface
+    const dx=f.tx-f.x,dy=f.ty-f.y,dz=f.tz-f.z,dl=Math.hypot(dx,dy,dz)||1,k=1-Math.exp(-turn*dt);
+    f.vx=lerp(f.vx,dx/dl*spd,k);f.vy=lerp(f.vy,dy/dl*spd*.5,k);f.vz=lerp(f.vz,dz/dl*spd,k);
+    let nx=f.x+f.vx*dt,nz=f.z+f.vz*dt;const dep=fishDepth(nx,nz);
+    if(dep<Math.max(.6,sp.band[0]*.6)){f.vx*=-.5;f.vz*=-.5;f.t=0;f.tx=f.hx;f.tz=f.hz;nx=f.x;nz=f.z}
+    const wr=Math.hypot(nx-SUNK.x,nz-SUNK.z);if(wr<4.6&&f.y>-7){nx=SUNK.x+(nx-SUNK.x)/wr*4.6;nz=SUNK.z+(nz-SUNK.z)/wr*4.6}
+    f.x=nx;f.z=nz;f.y=clamp(f.y+f.vy*dt,gh(f.x,f.z)+.25+f.size*.1,-.28);
+    f.sw=Math.min(1,Math.hypot(f.vx,f.vz)/(sp.spd*2.5));
+  }
+  // draw the fish near the viewer, a few draw calls for the whole lake; small or distant fish use the coarser bodies
+  const zk=Math.tan(GL.cam.fov*Math.PI/360)/Math.tan(36*Math.PI/180);
+  for(const kind in LF.sp){const S2=LF.sp[kind];for(const L of S2.lv)L.n=0;
+    if(camNear)for(const f of LF.list){if(f.kind!==kind||f.dead)continue;const d2=(f.x-cam.x)**2+(f.y-cam.y)**2+(f.z-cam.z)**2;if(d2>55*55)continue;
+      const d=Math.sqrt(d2)*zk/f.size,L=S2.lv[d<7?0:d<20?1:2];if(L.n>=S2.cap)continue;
+      const h=Math.hypot(f.vx,f.vz),yaw=h>.02?Math.atan2(-f.vz,f.vx):f.yaw||0;f.yaw=yaw;_fe.set(0,yaw,clamp(Math.atan2(f.vy,h+.05),-.5,.5));_fq.setFromEuler(_fe);
+      _fm.compose(_fv.set(f.x,f.y,f.z),_fq,_fs.setScalar(f.size));L.im.setMatrixAt(L.n,_fm);L.im.setColorAt(L.n,_fc.setScalar(f.tint));L.sw.setXY(L.n,f.ph,f.sw||0);L.n++}
+    for(const L of S2.lv){const im=L.im;im.count=L.n;im.visible=L.n>0;if(L.n){im.instanceMatrix.needsUpdate=true;im.instanceColor.needsUpdate=true;L.sw.needsUpdate=true}}}
+}
+/* the pike: patrols its weed bed; if you swim close it stalks, circles in, darts and bites, then backs off */
+function pikeThink(f,dt,body,dP){
+  const sp=f.sp;
+  if(!body||f.cd>0&&f.state!=='retreat'){if(f.state!=='swim'&&f.state!=='retreat')f.state='swim'}
+  if(f.state==='swim'){if(f.t<=0||Math.hypot(f.tx-f.x,f.tz-f.z)<1){f.t=5+Math.random()*8;const s=fishSpot(sp,f.hx,f.hz,15,Math.random);if(s){f.tx=s[0];f.ty=s[1];f.tz=s[2]}}
+    if(body&&dP<9&&f.cd<=0){f.state='stalk';f.st=0;if(LF.warnT<=0){LF.warnT=25;toast(LF.biteN?'The pike is back. Get out of the water!':'A long dark shape is circling you: a big pike. Swim for shore!',3.5);Snd.tone(70,.6,'sine',.08,-20)}}
+    return sp.spd}
+  if(f.state==='stalk'){if(!body||dP>14){f.state='swim';return sp.spd}
+    // close in from the side, a couple of metres off, then go
+    const a=Math.atan2(f.z-body.z,f.x-body.x)+.35*dt*3;f.tx=body.x+Math.cos(a)*2.4;f.tz=body.z+Math.sin(a)*2.4;f.ty=body.y-.15;f.st+=dt;
+    if(f.st>2.4&&dP<3.6){f.state='strike';f.st=0}return 1.7}
+  if(f.state==='strike'){f.st+=dt;if(!body){f.state='retreat';f.st=0;return 2}f.tx=body.x;f.ty=body.y;f.tz=body.z;
+    if(dP<.45+f.size*.25){pikeBite(f,body);f.state='retreat';f.st=0;f.cd=7+Math.random()*4;const ax=f.x-body.x,az=f.z-body.z,l=Math.hypot(ax,az)||1;f.tx=f.x+ax/l*10;f.tz=f.z+az/l*10;f.ty=f.y-1}
+    else if(f.st>.9){f.state='retreat';f.st=0;f.cd=3}return 7.5}
+  if(f.state==='retreat'){f.st+=dt;if(f.st>4){f.state='swim';f.t=0}return 2.2}
+  return sp.spd;
+}
+function pikeBite(f,body){
+  const dmg=Math.round(8+f.size*5);LF.biteN++;hurt(dmg);camS.shake=Math.max(camS.shake,.45);
+  for(let i=0;i<14;i++)PSN.spawn(body.x+rnd(-.2,.2),body.y+rnd(-.2,.2),body.z+rnd(-.2,.2),rnd(-.4,.4),rnd(-.1,.4),rnd(-.4,.4),rnd(1,2),rnd(.03,.08),[.55,.04,.04],.2,0,.7);
+  const ax=body.x-f.x,az=body.z-f.z,l=Math.hypot(ax,az)||1;if(pl.dive){DIVE.vx+=ax/l*1.6;DIVE.vz+=az/l*1.6}else{pl.vx+=ax/l*1.6;pl.vz+=az/l*1.6}
+  Snd.noise(.18,500,.5);toast(LF.biteN===1?`A ${f.size>1?'huge ':''}pike bit you! (-${dmg}) It will come back. Get out of the water.`:`Pike bite! (-${dmg})`,3);
+}
+/* an arrow under the water: did it hit a lake fish? */
+function lakeFishHit(P){
+  if(!LF.ready)return false;
+  for(const f of LF.list){if(f.dead)continue;const r=.1+f.size*.22;if(Math.hypot(P.x-f.x,P.z-f.z)<r&&Math.abs(P.y-f.y)<.08+f.size*.08){
+    f.dead=60+Math.random()*60;S.inv.fish=(S.inv.fish|0)+f.sp.food;S.stats.fish=(S.stats.fish|0)+1;Snd.splash();
+    toast(`You shot a ${f.size>f.sp.L[1]*.9?'big ':''}${f.sp.name}! +${f.sp.food} fish`,3.2);return true}}
+  return false;
 }
 /* ================= PEOPLE: the Ready Player Me avatar from the three.js examples ================= */
 const PEOPLE={ready:false,failed:false};
@@ -7111,6 +7661,7 @@ const BUILD3D=[];
   BUILD3D.push(buildPlanes);
   for(const k of['wolf','bear','moose'])BUILD3D.push(()=>rigData(k));
   BUILD3D.push(prebuildCreatures);
+  BUILD3D.push(buildLakeFish);
   BUILD3D.push(()=>{buildCreatures();buildBowVM();buildFlight();buildDucks();loadPeople()});
   BUILD3D.push(warmCreatures);
   BUILD3D.push(()=>{PSN=new PS(2400,false);PSA=new PS(1600,true);makeRain();makeTornado();lightningInit();WORLD.ready=true;initQuality()});
@@ -7171,7 +7722,7 @@ function saveOpenNow(){if(!canSaveNow())return false;return persistSave('open',s
 function applyWeatherNow(type){const o=WXT[type];WX.type=type;WX.label=o.label;Object.assign(WX,{dark:o.dark,rain:o.rain,wind:o.wind,fog:o.fog,hail:o.hail})}
 async function openResume(sv){
   resetSeq();S.open=true;S.ch=10;S.retry=false;scene='play';S.cut=false;S.qte=null;S.camLock=null;S.chTitle='SURVIVAL LOG';S.limitR=1e9;S.limitMsg='';S.paused=false;
-  const s=sv.S;Object.assign(S,{day:s.day,tod:s.tod,hp:Math.max(40,s.hp),hunger:Math.max(30,s.hunger),thirst:Math.max(30,s.thirst),inv:clone(s.inv),fl:clone(s.fl)||{},fire:!!s.fire,shelter:!!s.shelter,eltOn:!!s.eltOn,planeUp:!!s.planeUp,stats:clone(s.stats)||{birds:0,fish:0},disc:clone(s.disc)||{},discN:s.discN||0,mooseT:s.mooseT||rnd(260,420)});
+  const s=sv.S;Object.assign(S,{day:s.day,tod:s.tod,hp:Math.max(40,s.hp),hunger:Math.max(30,s.hunger),thirst:Math.max(30,s.thirst),inv:clone(s.inv),fl:clone(s.fl)||{},fire:!!s.fire,shelter:!!s.shelter,eltOn:!!s.eltOn,planeUp:true,stats:clone(s.stats)||{birds:0,fish:0},disc:clone(s.disc)||{},discN:s.discN||0,mooseT:s.mooseT||rnd(260,420)});
   S.todTo=null;S.dayRate=.02;S.clock=true;S.engine=0;S.storm=0;S.stormTarget=0;S.tornado=-1;S.stormRun=false;S.mosq=false;S.birdT=0;S.saveT=25;S.threat=0;S.threatList=[];
   [...WORLD.stumps,...WORLD.snags].forEach((q,i)=>{q.cut=(sv.cuts&&sv.cuts[i])||0});
   wxReset();const wt=sv.wx&&WXT[sv.wx.type]?sv.wx.type:'clear';applyWeatherNow(wt);WX.t=Math.max(40,(sv.wx&&sv.wx.t)||rnd(120,240));WX.wet=(sv.wx&&sv.wx.wet)||0;WX.aurDay=(sv.wx&&sv.wx.aurDay)??-1;WETU.value=WX.wet;
@@ -7197,11 +7748,12 @@ function saveSummary(sv){
 }
 /* ================= GRAPHICS QUALITY, FRAME COUNTER AND AUTO-TUNING ================= */
 const QUAL={
-  high:{pr:1.5,refl:true,ao:true,rays:true,bloom:true,shadow:2048,shInt:.12,near:54,nears:28,under:1,label:'HIGH'},
-  medium:{pr:1,refl:false,ao:false,rays:false,bloom:true,shadow:2048,shInt:.2,near:44,nears:22,under:.78,label:'MEDIUM'},
-  low:{pr:.8,refl:false,ao:false,rays:false,bloom:false,shadow:1024,shInt:.34,near:34,nears:15,under:.55,label:'LOW'}
+  high:{pr:1.5,refl:true,ao:true,rays:true,bloom:true,shadow:2048,shInt:.12,near:54,nears:28,under:1,dens:1,label:'HIGH'},
+  medium:{pr:1,refl:false,ao:false,rays:false,bloom:true,shadow:2048,shInt:.2,near:44,nears:22,under:.78,dens:.8,label:'MEDIUM'},
+  low:{pr:.8,refl:false,ao:false,rays:false,bloom:false,shadow:1024,shInt:.34,near:34,nears:15,under:.55,dens:.5,label:'LOW'}
 };
-const Q={mode:'auto',tier:'medium',fps:60,ms:16.7,worst:0,acc:0,n:0,w:0,wt:0,calls:0,tris:0,show:true,gov:0,govT:0,hold:3,pr:1,stable:0};
+const Q={mode:'auto',tier:'medium',fps:60,ms:16.7,worst:0,acc:0,n:0,w:0,wt:0,calls:0,tris:0,show:true,gov:0,govT:0,hold:3,pr:1,stable:0,gpu:'',ceil:2,good:0,tried:{}};
+const TIERS=['low','medium','high'];
 (function(){try{const m=localStorage.getItem('hatchet.gfx');if(m&&(m==='auto'||QUAL[m]))Q.mode=m;const f=localStorage.getItem('hatchet.fps');if(f==='0')Q.show=false}catch(e){}})();
 function applyQuality(tier){
   const q=QUAL[tier];if(!q||!GL.ren)return;Q.tier=tier;
@@ -7210,16 +7762,23 @@ function applyQuality(tier){
   const sh=GL.sun.shadow;if(sh.mapSize.x!==q.shadow){sh.mapSize.set(q.shadow,q.shadow);if(sh.map){sh.map.dispose();sh.map=null}}
   Q.shInt=q.shInt;GL.shadowStamp=-1e9;if(WORLD.waterMats)for(const w of WORLD.waterMats)w.uniforms.uClouds.value=tier==='high'?1:0;
   VEG.NEAR2=q.near*q.near;VEG.NEARS2=q.nears*q.nears;VEG.px=1e9;
-  for(const m of VEG.under){const u=m.userData;if(u.vis!==undefined)u.vr=VCH*.71+u.vis*q.under}
+  for(const m of VEG.under){const u=m.userData;if(u.vis!==undefined)u.vr=VCH*.71+u.vis*q.under;if(u.thin)m.count=Math.max(1,Math.round(u.n*q.dens))}
   fit();Q.hold=3.5;Q.acc=0;Q.n=0;Q.stable=0;
 }
-function initQuality(){
-  let t=Q.mode==='auto'?((navigator.hardwareConcurrency||4)>=8&&(window.devicePixelRatio||1)<=1.5?'high':'medium'):Q.mode;
-  if(LOWQ)t='low';applyQuality(t);
+/* a first guess from the graphics chip's name: dedicated graphics start on HIGH, laptop chips with stronger built-in
+   graphics on MEDIUM, and everyday Intel graphics, Chromebook, phone and tablet chips on LOW. The governor then
+   lowers it if the frame rate is poor, or tries one step up if it stays smooth. */
+function gpuGuess(){
+  let r='';try{const gl=GL.ren.getContext(),e=gl.getExtension('WEBGL_debug_renderer_info');r=String((e&&gl.getParameter(e.UNMASKED_RENDERER_WEBGL))||gl.getParameter(gl.RENDERER)||'')}catch(e){}
+  Q.gpu=r;if(LOWQ)return 'low';
+  if(/nvidia|geforce|quadro|rtx|radeon\s*(rx|pro|r9|vii)|apple m\d|arc\s*a\d/i.test(r))return 'high';
+  if(/swiftshader|llvmpipe|softpipe|software|basic render|mali|adreno|powervr|videocore|apple a\d|intel/i.test(r)&&!/iris/i.test(r))return 'low';
+  return 'medium';
 }
+function initQuality(){Q.guess=gpuGuess();applyQuality(Q.mode==='auto'?Q.guess:Q.mode)}
 function setGraphics(mode){
   Q.mode=mode;try{localStorage.setItem('hatchet.gfx',mode)}catch(e){}
-  if(mode==='auto'){const t=(navigator.hardwareConcurrency||4)>=8&&(window.devicePixelRatio||1)<=1.5?'high':'medium';applyQuality(LOWQ?'low':t)}else applyQuality(mode);
+  Q.ceil=2;Q.tried={};Q.good=0;applyQuality(mode==='auto'?Q.guess||gpuGuess():mode);
 }
 function cycleGraphics(){const o=['auto','high','medium','low'],n=o[(o.indexOf(Q.mode)+1)%4];setGraphics(n);toast('Graphics: '+(n==='auto'?'Auto ('+QUAL[Q.tier].label+')':QUAL[n].label),2.4)}
 function toggleFps(){Q.show=!Q.show;try{localStorage.setItem('hatchet.fps',Q.show?'1':'0')}catch(e){}}
@@ -7240,8 +7799,15 @@ function qualityGov(raw){
   if(Q.hold>0){Q.hold-=raw;return}
   Q.govT+=raw;Q.gov++;
   if(Q.govT>=2.2){const fps=Q.gov/Q.govT;Q.govT=0;Q.gov=0;
-    if(fps<44){const t=Q.tier;if(t==='high')applyQuality(fps<26?'low':'medium');else if(t==='medium')applyQuality('low');else if(fps<30&&GL.userPR>.55){GL.userPR=Math.max(.55,GL.userPR-.1);Q.pr=GL.userPR;fit();Q.hold=2}
-      if(Q.tier!==t&&scene==='play')toast('Graphics lowered to '+QUAL[Q.tier].label+' to keep the game smooth. Press G to change.',3.4)}}
+    if(fps<44){const t=Q.tier,i=TIERS.indexOf(t),trial=Q.tried[t]&&Q.good<0;Q.good=0;
+      if(trial)applyQuality(TIERS[i-1]);   // the step up was too much: go back
+      else if(t==='high')applyQuality(fps<26?'low':'medium');else if(t==='medium')applyQuality('low');else if(fps<30&&GL.userPR>.55){GL.userPR=Math.max(.55,GL.userPR-.1);Q.pr=GL.userPR;fit();Q.hold=2}
+      Q.ceil=Math.min(Q.ceil,TIERS.indexOf(Q.tier));   // never climb back to a setting that was too slow
+      if(Q.tier!==t&&scene==='play'&&!trial)toast('Graphics lowered to '+QUAL[Q.tier].label+' to keep the game smooth. Press G to change.',3.4)}
+    else if(fps>=56){Q.good=Math.max(0,Q.good)+1;const i=TIERS.indexOf(Q.tier);
+      // smooth for about ten seconds: try the next setting up, once
+      if(Q.good>=4&&i<Q.ceil&&!Q.tried[TIERS[i+1]]&&GL.userPR>=QUAL[Q.tier].pr-.01){Q.tried[TIERS[i+1]]=1;applyQuality(TIERS[i+1]);Q.good=-1}}
+    else if(Q.good>0)Q.good=0}
 }
 function drawFps(g){
   if(!Q.show||scene==='load')return;
@@ -7249,7 +7815,7 @@ function drawFps(g){
   g.save();g.font=`600 13px ${FU}`;g.textAlign='right';const w=g.measureText(t).width+14;g.fillStyle='rgba(6,8,6,.55)';rr(g,W-w-6,3,w,19,6);g.fill();g.fillStyle=col;g.fillText(t,W-13,17);g.restore();
 }
 /* ================= GAME STATE ================= */
-const S={ch:-1,day:1,tod:10.3,todTo:null,todRate:.05,storm:0,stormTarget:0,flash:0,hp:100,hunger:85,thirst:85,inv:{branches:0,tinder:0,wood:0,meat:0,fish:0,signal:0,pack:0,elt:0,stave:0,shoots:0,arrows:0,feathers:0},weapon:'hatchet',fl:{},goals:[],limitR:100,limitMsg:'',clock:false,mosq:false,fire:false,shelter:false,eltOn:false,planeUp:false,tornado:-1,stats:{birds:0,fish:0},cut:false,qte:null,camLock:null,engine:0,hint:'',chTitle:'',retry:false,journal:false,markFn:null,stormRun:false,moveOK:false,sparkFlash:0,loc:'',locT:0,endT:0,briefDone:false,briefT:0,tornPos:{x:60,z:-130,s:1}};
+const S={ch:-1,day:1,tod:10.3,todTo:null,todRate:.05,storm:0,stormTarget:0,flash:0,hp:100,hunger:85,thirst:85,inv:{branches:0,tinder:0,wood:0,meat:0,fish:0,signal:0,pack:0,elt:0,stave:0,shoots:0,arrows:0,feathers:0,medkit:0},weapon:'hatchet',fl:{},goals:[],limitR:100,limitMsg:'',clock:false,mosq:false,fire:false,shelter:false,eltOn:false,planeUp:false,tornado:-1,stats:{birds:0,fish:0},cut:false,qte:null,camLock:null,engine:0,hint:'',chTitle:'',retry:false,journal:false,markFn:null,stormRun:false,moveOK:false,sparkFlash:0,loc:'',locT:0,endT:0,briefDone:false,briefT:0,tornPos:{x:60,z:-130,s:1}};
 Object.assign(S,{open:false,dayRate:.02,disc:{},menu:0,wx:{t:200,on:false},mooseT:300,birdT:0,discN:0});
 /* ================= INTERACTABLES ================= */
 const U=k=>TOUCH?'USE':k;
@@ -7272,7 +7838,7 @@ addIA({pos:KEY.pit,r:4,pr:()=>S.fire&&(S.inv.meat>0||S.inv.fish>0)?'Cook and eat
 addIA({test:()=>pl.z>18&&pl.z<205&&Math.abs(pl.x-streamX(pl.z))<5.5,r:0,pr:()=>chk(5,8)&&!S.cut?'Spear a fish':null,act:()=>{startMini('fish',ok=>{if(ok){S.inv.fish++;S.stats.fish++;toast('Caught a fish! Cook it at the fire.',4)}})}});
 addIA({pos:KEY.eggs,r:4.5,pr:()=>chk(6)&&!S.fl.eggs?'Dig for turtle eggs':null,act:()=>{anim('reach',2.8,1);Snd.noise(.4,900,.1);for(let i=0;i<9;i++)after(i*.3,()=>chips(KEY.eggs[0]+rnd(-.6,.6),gh(KEY.eggs[0],KEY.eggs[1])+.1,KEY.eggs[1]+rnd(-.6,.6),5,[.8,.72,.55]));
   if(!moose){spawnMoose(334,128);moose.tx=KEY.eggs[0]+16;moose.tz=KEY.eggs[1]-3}after(2.7,()=>{S.fl.eggs=1;S.hunger=Math.min(100,S.hunger+30);Snd.pick();toast('Turtle eggs! But something big is watching you...',4)})}});
-addIA({pos:KEY.dive,r:7,pr:()=>chk(8)&&!S.inv.pack&&!S.cut?'Dive to the wreck':null,act:()=>{S.cut=true;fade(1,.5).then(()=>{scene='dive';MINI.on=false;startMini('dive',ok=>{scene='play';if(ok){S.inv.pack=1;S.inv.elt=1}S.cut=false;FADE.a=1;FADE.to=0;FADE.sp=2});FADE.to=0;FADE.sp=2})}});
+diveIAs();treeIAs();
 addIA({pos:KEY.pit,r:5.5,pr:()=>chk(9)&&S.inv.elt&&!S.eltOn?'Switch on the transmitter':null,act:()=>{anim('reach',1.3,1);after(.9,()=>{S.eltOn=true;Snd.good();Snd.tone(1200,.1,'square',.1,0,.15);Snd.tone(1200,.1,'square',.1,0,.4)})}});
 KEY.snag.forEach((p,i)=>addIA({pos:p,r:3.2,pr:()=>{const st=WORLD.snags[i];return chk(9)&&S.eltOn&&st&&st.cut<3?'Chop dry wood':null},act:()=>{const st=WORLD.snags[i];chopAct(st,()=>{S.inv.signal++;toast(`Signal wood: ${S.inv.signal}/3`)})}}));
 addIA({pos:KEY.signal,r:5,pr:()=>chk(9)&&S.eltOn&&!S.fl.signalLit?(S.inv.signal>=3?'Light the signal fire':'!Chop 3 dry snags on the hill first'):null,act:()=>{startMini('fire',ok=>{if(ok){S.fl.signalLit=1;Snd.good()}},{need:2})}});
@@ -7347,9 +7913,21 @@ function drawHUD(g){
     g.font=`500 19px ${FU}`;gl.forEach((o,i)=>{const done=o.d(),yy=y+58+i*28;g.strokeStyle=done?'#8aa860':'rgba(236,230,210,.5)';g.lineWidth=2;g.beginPath();g.arc(x+26,yy-6,7,0,TAU);g.stroke();if(done){g.fillStyle='#8aa860';g.beginPath();g.arc(x+26,yy-6,4,0,TAU);g.fill()}
       g.fillStyle=done?'rgba(236,230,210,.45)':'#ece6d2';const t=typeof o.t==='function'?o.t():o.t;g.fillText(t,x+44,yy,w-60)})}
   // inventory
-  const items=[['HATCHET',pl.hasH?1:0,'#cfd5d8'],['BOW',S.fl.bow?1:0,'#d8bd8e'],['ASH STAVE',S.inv.stave|0,'#c9b48a'],['WILLOW SHOOTS',S.inv.shoots|0,'#9aa860'],['FEATHERS',S.fl.fletched?0:S.inv.feathers|0,'#b8b2a4'],['BRANCHES',S.inv.branches,'#8a6a42'],['BIRCH BARK',S.inv.tinder,'#e8e2cc'],['DRY LOGS',S.inv.wood,'#b08850'],['RAW BIRD',S.inv.meat,'#c88a6a'],['FISH',S.inv.fish,'#8ab0c0'],['SIGNAL WOOD',S.inv.signal,'#b08850'],['SURVIVAL PACK',S.inv.pack,'#c6561f'],['TRANSMITTER',S.inv.elt,S.eltOn&&Math.sin(T*5)>0?'#ff4030':'#e8863a']];
+  const items=[['HATCHET',pl.hasH?1:0,'#cfd5d8'],['BOW',S.fl.bow?1:0,'#d8bd8e'],['ASH STAVE',S.inv.stave|0,'#c9b48a'],['WILLOW SHOOTS',S.inv.shoots|0,'#9aa860'],['FEATHERS',S.fl.fletched?0:S.inv.feathers|0,'#b8b2a4'],['BRANCHES',S.inv.branches,'#8a6a42'],['BIRCH BARK',S.inv.tinder,'#e8e2cc'],['DRY LOGS',S.inv.wood,'#b08850'],['RAW BIRD',S.inv.meat,'#c88a6a'],['FISH',S.inv.fish,'#8ab0c0'],['SIGNAL WOOD',S.inv.signal,'#b08850'],['MED KIT',S.inv.medkit|0,'#e0453a'],['SURVIVAL PACK',S.inv.pack,'#c6561f'],['TRANSMITTER',S.inv.elt,S.eltOn&&Math.sin(T*5)>0?'#ff4030':'#e8863a']];
   let x=24;const y=H-46;g.font=`600 15px ${FU}`;
   for(const[n,c,col]of items){if(!c&&n!=='HATCHET')continue;const lab=n==='HATCHET'?(pl.hasH?n:n+' (thrown)'):n==='BOW'?`BOW · ${S.inv.arrows|0} ARROW${(S.inv.arrows|0)===1?'':'S'}`:(c>1?`${n} ×${c}`:n),w=g.measureText(lab).width+34;g.fillStyle='rgba(8,10,8,.62)';rr(g,x,y,w,28,14);g.fill();if(S.fl.bow&&((n==='BOW')===((S.weapon||'hatchet')==='bow'))&&(n==='BOW'||n==='HATCHET')){g.strokeStyle='#e8863a';g.lineWidth=2;g.stroke()}g.fillStyle=col;g.beginPath();g.arc(x+15,y+14,5,0,TAU);g.fill();g.fillStyle='#ece6d2';g.fillText(lab,x+26,y+19);x+=w+8}
+  // how deep the hatchet has bitten into the tree being chopped
+  if(TREE.hud>0&&TREE.hk<1){const a=Math.min(1,TREE.hud*1.5),cx=W/2,cy=H/2;g.globalAlpha=a;g.strokeStyle='rgba(0,0,0,.45)';g.lineWidth=5;g.beginPath();g.arc(cx,cy,20,0,TAU);g.stroke();g.strokeStyle='#d9a35a';g.beginPath();g.arc(cx,cy,20,-Math.PI/2,-Math.PI/2+TAU*TREE.hk);g.stroke();g.globalAlpha=1}
+  // air while under water
+  if(pl.dive||(S.breath??1)<.995){const b=S.breath??1,n=10,bw=22,x0=W/2-n*bw/2,yb=H-84;   // below the toasts, above the inventoryg.fillStyle='rgba(8,10,8,.55)';rr(g,x0-48,yb-16,n*bw+60,32,16);g.fill();
+    g.font=`700 14px ${FU}`;g.textAlign='left';g.fillStyle=b<.3&&Math.sin(T*9)>0?'#ff6a50':'rgba(236,230,210,.85)';g.fillText('AIR',x0-38,yb+5);
+    for(let i=0;i<n;i++){const f=clamp(b*n-i,0,1);g.beginPath();g.arc(x0+i*bw+bw/2,yb,7,0,TAU);g.strokeStyle='rgba(200,235,245,.55)';g.lineWidth=1.5;g.stroke();if(f>0){g.fillStyle=`rgba(180,225,240,${.35+.55*f})`;g.beginPath();g.arc(x0+i*bw+bw/2,yb,7*f,0,TAU);g.fill()}}
+    if(DIVE.held){g.textAlign='left';g.font=`700 14px ${FU}`;g.fillStyle='#e0453a';g.fillText('+ MED KIT',x0+n*bw+8,yb+5)}}
+  // the strap: catch the marker inside the green band
+  if(ia&&ia.o.dive&&!DIVE.held){const bw=320,bx=W/2-bw/2,by=H*.62+34,m=kitMarker(),n=S.fl.kitPulls|0;g.fillStyle='rgba(8,10,8,.7)';rr(g,bx-10,by-10,bw+20,34,10);g.fill();
+    g.fillStyle='rgba(236,230,210,.18)';g.fillRect(bx,by,bw,14);g.fillStyle='rgba(120,210,110,.85)';g.fillRect(bx+(KIT.zone-KIT.w/2)*bw,by,KIT.w*bw,14);
+    g.fillStyle='#ffd27a';g.fillRect(bx+m*bw-2,by-4,4,22);g.font=`700 13px ${FU}`;g.textAlign='left';g.fillStyle='rgba(236,230,210,.85)';g.fillText(`PULLS ${n}/3`,bx,by+30);}
+  if(DIVE.u>0){const gr=g.createRadialGradient(W/2,H/2,H*.2,W/2,H/2,H*.9);gr.addColorStop(0,'rgba(10,40,40,0)');gr.addColorStop(1,'rgba(4,18,20,.55)');g.fillStyle=gr;g.fillRect(0,0,W,H)}
   // crosshair + throw charge
   const cx=W/2,cy=H/2;g.fillStyle='rgba(236,230,210,.75)';g.beginPath();g.arc(cx,cy,2,0,TAU);g.fill();
   if(pl.draw>0){const k=pl.draw;g.strokeStyle='rgba(0,0,0,.45)';g.lineWidth=4;g.beginPath();g.arc(cx,cy,18,0,TAU);g.stroke();g.strokeStyle=k>.97?'#ffd27a':'#e8c088';g.beginPath();g.arc(cx,cy,18,-Math.PI/2,-Math.PI/2+TAU*k);g.stroke();g.fillStyle='rgba(236,230,210,.8)';for(const [dx,dy] of[[0,-1],[0,1],[-1,0],[1,0]])g.fillRect(cx+dx*(8-4*k)-1,cy+dy*(8-4*k)-1,2,2)}
@@ -7398,12 +7976,12 @@ const JOURNAL=[
  {c:5,t:'Hunger',x:'Berries are not enough. A bow beats a thrown hatchet: a springy ash stave, a sneaker lace for the string, straight willow shoots for arrows with their points hardened in the coals, and later foolbird feathers so they fly true. Draw, hold, release, then walk over and pull your arrows back out. Fish are deeper than they look in the water, so aim below them. Crying never fed him once. Work does.'},
  {c:6,t:'The moose',x:'A moose is not a monster. It is a very large animal that wants to be left alone. Watch for the pawing and the lowered head, then step aside the moment it charges.'},
  {c:7,t:'The storm',x:'A tornado shredded the shelter. But the storm also dragged the plane up from the lake bottom. Nothing out here is only good or only bad.'},
- {c:8,t:'The wreck',x:'The survival pack was still inside: first-aid kit, rations, fishing line, foil blanket and a small orange emergency transmitter.'},
+ {c:8,t:'The wreck',x:'Swam down into the sunken plane through the door gap and tugged the red med kit loose from the back seat. Strapped to it: the survival pack, with rations, fishing line, foil blanket and a small orange emergency transmitter. Air runs out fast down there; come up before it does.'},
  {c:9,t:'The signal',x:'Brian has stopped waiting to be found. Now he is helping himself get found: a transmitter, a signal fire on the high hill, and the long run back to the lake.'}];
 function journalEntries(){
   if(!S.open)return JOURNAL.filter(e=>e.c<=Math.max(0,S.ch)).map(e=>({h:(e.c===0?'PROLOGUE':'CHAPTER '+e.c)+' · '+e.t.toUpperCase(),x:e.x}));
   const out=[{h:'SURVIVING',x:'Water first, then food, then shelter and fire. Everything you need is out here but nothing is handed to you. Berries that look good are not always kind. Birch bark and dry wood will catch a spark from the hatchet. A moose is not a monster, it is a very large animal that wants to be left alone.'},
-    {h:'WILDLIFE',x:'Wolves hunt in packs, mostly at night. They circle first and rush when you look away. They will not cross a campfire or follow you into deep water, and two hatchet hits usually send one running. Bears bluff before they charge: back away slowly, keep a fire between you, or sidestep the charge (Q) as it comes. Press E to swing the hatchet when something is close.'},
+    {h:'WILDLIFE',x:'Wolves hunt in packs, mostly at night. They circle first and rush when you look away. They will not cross a campfire or follow you into deep water, and two hatchet hits usually send one running. Bears bluff before they charge: back away slowly, keep a fire between you, or sidestep the charge (Q) as it comes. Press E to swing the hatchet when something is close. The lake is full of fish: perch, walleye, whitefish and lake trout, which an arrow can take from the shallows. But northern pike lurk in the weed beds, and a big one will stalk a swimmer and bite. If one starts circling you, get out of the water.'},
     {h:'WEATHER',x:'Rain soaks you, and being wet and cold at night drains your health, so get under trees, into the shelter or beside a fire. Heavy rain will drown an unsheltered campfire. Hail stings in the open. Fog hides what is coming, wind drives leaves through the air, and after a storm a rainbow sometimes appears. Clear nights may bring the northern lights. Rainwater counts as a drink.'}];
   for(const [c,f] of[[1,()=>S.fl.drank||S.fl.cherry],[2,()=>S.shelter],[4,()=>S.fire],[5,()=>S.stats.birds>0||S.fl.cooked],[6,()=>S.fl.eggs||S.fl.mooseGone],[8,()=>S.inv.pack],[9,()=>S.eltOn]])if(f()){const e=JOURNAL.find(q=>q.c===c);if(e)out.push({h:e.t.toUpperCase(),x:e.x})}
   for(const p of POIS)if(S.disc[p.id])out.push({h:'DISCOVERY · '+p.name.toUpperCase(),x:p.text});
@@ -7508,7 +8086,7 @@ function restoreCK(){if(!CK)return;const o=JSON.parse(CK);Object.assign(S,{day:o
 const setGoals=g=>{S.goals=g};
 const goalsDone=()=>S.goals.every(o=>o.d());
 async function begin(o){
-  scene='play';S.cut=false;S.qte=null;S.hint=o.hint||'';S.goals=[];S.chTitle=o.name||'';S.camLock=null;S.markFn=o.mark||null;
+  scene='play';S.cut=false;S.qte=null;S.swimOK=false;S.hint=o.hint||'';S.goals=[];S.chTitle=o.name||'';S.camLock=null;S.markFn=o.mark||null;
   S.limitR=o.limitR;S.limitMsg=o.msg||'';if(o.day)S.day=o.day;
   S.hunger=Math.max(S.hunger,50);S.thirst=Math.max(S.thirst,58);S.hp=Math.max(S.hp,55);
   S.tod=o.tod;S.todTo=o.todTo??null;S.todRate=o.rate??.05;S.clock=true;S.engine=0;S.storm=0;S.stormTarget=0;S.tornado=-1;S.stormRun=false;
@@ -7577,7 +8155,7 @@ async function ch4(){
   await begin({name:'Chapter Four',title:'CHAPTER FOUR',sub:'Fire — Day 2',x:KEY.shelter[0],z:KEY.shelter[1]-3.5,look:[110,40],limitR:200,msg:'',day:2,tod:7,todTo:14,rate:.03,hint:`${U('E')} to interact · again to swing when chopping`,mark:()=>{const m=[];if(S.inv.tinder<2)KEY.bark.forEach((p,i)=>{if(!S.fl['bark'+i])m.push([p[0],p[1],'Birch'])});if(S.inv.wood<3)KEY.stump.forEach((p,i)=>{if(WORLD.stumps[i].cut<3)m.push([p[0],p[1],'Stump'])});if(!S.fire&&S.inv.tinder>=2&&S.inv.wood>=3)m.push([KEY.strike[0],KEY.strike[1],'Rock']);return m}});
   S.inv.tinder=0;S.inv.wood=0;pl.quills=1;
   if(!S.retry)await say(['Morning. His legs ache where the quills went in, and his stomach is a hollow drum, but he can only think about those sparks.','Sparks need something to catch. The papery bark of the birch trees in the thicket makes perfect tinder, and dry, dead wood will keep a flame alive.']);
-  setGoals([{t:()=>`Peel birch bark in the thicket (${S.fire?2:Math.min(2,S.inv.tinder)}/2)`,d:()=>S.inv.tinder>=2||S.fire},{t:()=>`Chop dry wood from the stumps (${S.fire?3:Math.min(3,S.inv.wood)}/3)`,d:()=>S.inv.wood>=3||S.fire},{t:'Strike a fire with the hatchet at the rock wall',d:()=>S.fire}]);
+  setGoals([{t:()=>`Peel birch bark in the thicket (${S.fire?2:Math.min(2,S.inv.tinder)}/2)`,d:()=>S.inv.tinder>=2||S.fire},{t:()=>`Chop wood from the stumps or a tree (${S.fire?3:Math.min(3,S.inv.wood)}/3)`,d:()=>S.inv.wood>=3||S.fire},{t:'Strike a fire with the hatchet at the rock wall',d:()=>S.fire}]);
   await until(goalsDone);pl.quills=0;await wait(1.2);
   await say(['The tinder smokes, glows, and then catches. A flicker. A flame.','For the first time since the crash, Brian is warm. The night is not nearly as large as it was yesterday.']);
   await endChapter();
@@ -7616,21 +8194,23 @@ async function ch7(){
   camS.shake=2;S.flash=1;Snd.thunder();S.tornPos.s=1.6;await wait(.9);S.flash=1;await fade(1,1.2);
   S.shelter=false;S.fl.wrecked=true;S.stormRun=false;S.stormTarget=0;S.storm=0;S.tornado=-1;for(const d of debris)GL.scene.remove(d.m);debris.length=0;S.planeUp=true;S.day=39;S.tod=6.4;S.todTo=null;
   await wait(1.2);await fade(0,1.6);
-  await say(['Silence. A fine, cold mist drifts off the lake.','And there, floating in the shallows where the storm dragged it up from the deep, is the plane.']);
+  await say(['Silence. A fine, cold mist drifts off the lake.','And there, out on the lake, is the plane. The storm has rolled it over in the deep water, and now its tail sticks up out of the lake like a white fin.']);
   S.cut=false;await endChapter();
 },
 async function ch8(){
-  await begin({name:'Chapter Eight',title:'CHAPTER EIGHT',sub:'The Wreck — Day 39',x:KEY.shelter[0]-8,z:KEY.shelter[1]-8,look:[40,-20],limitR:330,msg:'',day:39,tod:7,todTo:11,rate:.02,hint:`Walk back to the lake shore, then press ${U('E')} to dive. Tap ${U('USE')} rapidly to free the strap.`,mark:()=>!S.inv.pack?[[KEY.dive[0],KEY.dive[1],'Lake']]:[]});
-  S.planeUp=true;S.shelter=false;
-  if(!S.retry)await say(['Everything he lost is inside that plane. And maybe something that can bring rescue: the survival pack stowed behind the seats, if the water has not taken it.','Brian takes a deep breath. It is a long walk back to the lake.']);
-  setGoals([{t:'Dive to the wreck and bring up the survival pack',d:()=>S.inv.pack}]);
-  await until(goalsDone);await wait(1.2);
-  await say(['Inside the pack: a first-aid kit, dried rations, a coil of fishing line, a folded foil blanket and a small orange transmitter with a dented case.','He turns it over in his hands. If it works, someone, somewhere, might hear it.']);
+  await begin({name:'Chapter Eight',title:'CHAPTER EIGHT',sub:'The Wreck — Day 39',x:KEY.shelter[0]-8,z:KEY.shelter[1]-8,look:[40,-20],limitR:330,msg:'',day:39,tod:7,todTo:11,rate:.02,
+    hint:TOUCH?'Swim out to the tail. STROKE swims hard. Look down and swim (or DODGE) to dive, JUMP to rise. In through the door gap; the kit is behind the back seat.':`Swim out to the tail. Click for a strong stroke. Look down and swim (or hold ${U('C')}) to dive, ${U('SPACE')} to rise. In through the door gap; the kit is behind the back seat.`,
+    mark:()=>!S.inv.pack?[[SUNK.x,SUNK.z,DIVE.held?'Surface!':'Plane']]:[[KEY.dive[0],KEY.dive[1],'Shore']]});
+  S.planeUp=true;S.shelter=false;S.swimOK=true;
+  if(!S.retry)await say(['Everything he lost is inside that plane. And maybe something that can bring rescue: the red med kit and the survival pack strapped behind the seats, if the water has not taken them.','The plane lies nose-down in deep water. The door on his side is gone. He will have to swim down into the cabin, find the kit in the dark behind the back seat and fight its strap loose, all on one breath. It may take more than one dive.']);
+  setGoals([{t:'Swim down into the plane and bring up the med kit',d:()=>S.inv.pack},{t:'Get back to shore',d:()=>S.inv.pack&&!pl.swim&&!pl.dive}]);
+  await until(goalsDone);S.swimOK=false;await wait(1.2);
+  await say(['Inside the red case: bandages, antiseptic, a few painkillers. Strapped to it, the survival pack: dried rations, a coil of fishing line, a folded foil blanket and a small orange transmitter with a dented case.','He turns the transmitter over in his hands. If it works, someone, somewhere, might hear it.']);
   await endChapter();
 },
 async function ch9(){
   await begin({name:'Chapter Nine',title:'CHAPTER NINE',sub:'The Signal — Day 40',x:KEY.dive[0],z:KEY.dive[1]+4,look:[150,86],limitR:335,msg:'',day:40,tod:9,todTo:13,rate:.012,hint:'Walk east to your camp (the ring of stones) and switch on the transmitter',mark:()=>!S.eltOn?[[KEY.pit[0],KEY.pit[1],'Camp']]:S.inv.signal<3?KEY.snag.filter((p,i)=>WORLD.snags[i].cut<3).map(p=>[p[0],p[1],'Snag']):!S.fl.signalLit?[[KEY.signal[0],KEY.signal[1],'Signal site']]:S.fl.floatplane?[[KEY.floatplane[0],KEY.floatplane[1],'Plane!']]:[]});
-  S.planeUp=true;S.inv.pack=1;S.inv.elt=1;S.hunger=Math.max(S.hunger,60);S.thirst=Math.max(S.thirst,60);
+  S.planeUp=true;S.inv.pack=1;S.inv.elt=1;if(S.inv.medkit===undefined)S.inv.medkit=1;S.hunger=Math.max(S.hunger,60);S.thirst=Math.max(S.thirst,60);
   setGoals([{t:'Switch on the transmitter at your camp',d:()=>S.eltOn}]);
   await until(()=>S.eltOn);S.hint='';
   await say(['A tiny red light blinks. Maybe it is calling out. Maybe it is only a light.','Day after day it blinks, and nothing answers. Brian decides not to wait for rescue to find him, but to help it. Smoke and flame, high on the eastern hill, where the whole sky can see.']);
@@ -7661,7 +8241,7 @@ function story_die(){
 }
 async function runFrom(i){resetSeq();for(let c=i;c<CHS.length;c++){S.ch=c;if(!S.retry||!CK){saveCK();if(c>=1&&!S.open)persistSave('story',snapStory(c))}await CHS[c]();S.retry=false}}
 function newGame(mode,sv){
-  resetSeq();Object.assign(S,{open:mode==='open',disc:{},discN:0,ch:-1,day:1,tod:10.4,todTo:null,storm:0,stormTarget:0,hp:100,hunger:85,thirst:85,inv:{branches:0,tinder:0,wood:0,meat:0,fish:0,signal:0,pack:0,elt:0,stave:0,shoots:0,arrows:0,feathers:0},weapon:'hatchet',fl:{},goals:[],fire:false,shelter:false,eltOn:false,planeUp:false,tornado:-1,stats:{birds:0,fish:0},retry:false,cut:false,qte:null,camLock:null,journal:false});
+  resetSeq();Object.assign(S,{open:mode==='open',disc:{},discN:0,ch:-1,day:1,tod:10.4,todTo:null,storm:0,stormTarget:0,hp:100,hunger:85,thirst:85,inv:{branches:0,tinder:0,wood:0,meat:0,fish:0,signal:0,pack:0,elt:0,stave:0,shoots:0,arrows:0,feathers:0,medkit:0},weapon:'hatchet',fl:{},goals:[],fire:false,shelter:false,eltOn:false,planeUp:mode==='open',tornado:-1,stats:{birds:0,fish:0},retry:false,cut:false,qte:null,camLock:null,journal:false});
   [...WORLD.stumps,...WORLD.snags].forEach(p=>{p.cut=0});CK=null;clearBirds();clearBeasts();clearArrows();setWeapon('hatchet',true);roamPack=null;if(moose){GL.scene.remove(moose.m);moose=null}Snd.init();FADE.a=1;FADE.to=1;
   if(mode==='open'){if(sv)openResume(sv);else openRun()}
   else if(sv&&sv.ck){CK=sv.ck;restoreCK();[...WORLD.stumps,...WORLD.snags].forEach((q,i)=>{q.cut=(sv.cuts&&sv.cuts[i])||0});S.retry=false;S.paused=false;runFrom(sv.ch)}
@@ -7669,11 +8249,12 @@ function newGame(mode,sv){
 }
 /* ================= OPEN WORLD ================= */
 function openSetup(){
+  S.planeUp=true;
   for(let i=0,t=0;i<4&&t<200;t++){const a=Math.random()*TAU,d=rnd(26,60),x=pl.x+Math.cos(a)*d,z=pl.z+Math.sin(a)*d,h=gh(x,z);if(h>1.5&&h<16&&waterDepthAt(x,z)<=0&&splat(x,z,h,0)[0]<.25){spawnBird(x,z);i++}}
   S.hint=TOUCH?'Joystick to move · drag the screen to look · USE to interact':'WASD move · mouse look · SHIFT run · SPACE jump · E use · J field notes';
   S.markFn=()=>{const m=[];for(const p of POIS){if(S.disc[p.id])m.push([p.x,p.z,p.name.replace(/^The /,'')]);else if(S.fl.perch)m.push([p.x,p.z,'?'])}if(S.shelter)m.push([KEY.shelter[0],KEY.shelter[1],'Shelter']);if(S.fire)m.push([KEY.pit[0],KEY.pit[1],'Camp']);return m};
   setGoals([{t:'Drink at the lake',d:()=>S.fl.drank},{t:'Build a shelter at the rock wall',d:()=>S.shelter},{t:'Make a fire',d:()=>S.fire},{t:'Make a bow and arrows',d:()=>S.fl.bow},{t:'Hunt a foolbird and cook it',d:()=>S.fl.cooked},{t:'Spear a fish in the stream',d:()=>S.stats.fish>0},
-    {t:()=>`Find landmarks (${S.discN}/${POIS.length})`,d:()=>S.discN>=POIS.length},{t:'Recover the survival pack',d:()=>S.inv.pack},{t:'Signal for rescue',d:()=>S.fl.signalLit}]);
+    {t:()=>`Find landmarks (${S.discN}/${POIS.length})`,d:()=>S.discN>=POIS.length},{t:'Dive into the sunken plane for the med kit',d:()=>S.inv.pack},{t:'Signal for rescue',d:()=>S.fl.signalLit}]);
 }
 async function openRun(){
   resetSeq();S.open=true;S.ch=10;S.retry=false;scene='play';S.cut=false;S.qte=null;S.camLock=null;S.chTitle='SURVIVAL LOG';S.limitR=1e9;S.limitMsg='';
@@ -7729,13 +8310,13 @@ function worldUpdate(dt,camPos){
   if(S.sparkFlash>0)S.sparkFlash=Math.max(0,S.sparkFlash-dt*1.4);
   if(S.fl.flyby){S.fl.flyby.t+=dt}
   applyEnv();
-  lodUpdate(camPos.x,camPos.z);poiUpdate(dt);updateFires(dt);updateWreck(dt);syncWorld();loonsUpdate(dt);fishUpdate(dt);
+  lodUpdate(camPos.x,camPos.z);partsLOD();poiUpdate(dt);updateFires(dt);updateWreck(dt);syncWorld();loonsUpdate(dt);fishUpdate(dt);
   // camera-relative effects
   const cx=camPos.x,cy=camPos.y,cz=camPos.z;
   if(Math.random()<dt*7*nightF(S.tod)*(1-S.storm)&&scene!=='flight')PSA.spawn(cx+rnd(-16,16),gh(cx,cz)+rnd(.4,3),cz+rnd(-16,16),rnd(-.2,.2),rnd(-.1,.2),rnd(-.2,.2),rnd(3,5),.09,[.75,1,.4],0,0,.8);
   if(S.stormRun&&S.storm>.2)for(let i=0;i<S.storm*2.2;i++)PSN.spawn(cx-rnd(8,22),cy+rnd(-1,5),cz+rnd(-16,16),rnd(10,17),rnd(-1,2),rnd(-3,3),rnd(1.6,2.6),rnd(.06,.14),[.32,.42,.2],-.3,0,.9);
   if(S.mosq&&scene==='play'&&!nearFire(16)&&pl.x<150)for(let i=0;i<2;i++)PSN.spawn(cx+rnd(-.7,.7),cy+rnd(-.5,.5),cz+rnd(-.7,.7),rnd(-1.5,1.5),rnd(-1,1),rnd(-1.5,1.5),.35,.012,[.05,.05,.05],0,0,.9);
-  ducksUpdate(dt);arrowsUpdate(dt);farWalk();
+  ducksUpdate(dt);arrowsUpdate(dt);farWalk();diveEnv();treesUpdate(dt);lakeFishUpdate(dt);
   PSN.update(dt);PSA.update(dt);
   const rain=GL.rain,rk=S.open?WX.rain:S.storm;rain.visible=rk>.1;rain.material.uniforms.uAlpha.value=clamp(rk*1.2,0,1);rain.material.uniforms.uCam.value.set(cx,cy,cz);rain.material.uniforms.uSlant.value.set(.28+(S.open?WX.wind:S.storm)*.4,0);
   const tn=GL.tornado;tn.visible=S.tornado>=0;if(tn.visible){tn.position.set(S.tornPos.x,gh(S.tornPos.x,S.tornPos.z)-2,S.tornPos.z);tn.scale.setScalar(S.tornPos.s);tn.material.uniforms.uAlpha.value=clamp(S.storm*1.1,0,.95)}
@@ -7805,7 +8386,7 @@ async function boot(){
   window.__bt=[];for(let i=0;i<BUILD3D.length;i++){await new Promise(r=>setTimeout(r,12));const t0=performance.now();try{BUILD3D[i]();window.__bt.push([i,Math.round(performance.now()-t0)])}catch(e){console.error('build step',i,e);LOADMSG='Could not start the 3D view.';return}LOADK=(i+1)/BUILD3D.length;LOADMSG=msgs[Math.floor(LOADK*msgs.length*.999)]}
   loadSaves();saveInit();if(SaveSys.saved.story&&!SaveSys.saved.open)S.menu=1;
   fit();scene='title';placePlayer(KEY.spawn[0],KEY.spawn[1],0);S.tod=18.7;FADE.a=1;FADE.to=0;FADE.sp=1;
-  window.__game={farShow,FL_PASS,makePerson,dressPilot,loadPeople,FAR,farH,flGround,farTrees,FL_DIR,FL_GO,FL_LAKE,dlgTime,makeRig,RIGS,SPECIES,quadGait,makeBeastModel,makeMooseModel,makeBirdModel,makeDuckModel,makeLoon,makePorcupine,BVM,ARW,setWeapon,shootArrow,BOWC,fish,makeAL60,PEOPLE,ducks,spawnDuck,killDuck,qualityGov,frameStats,Q,QUAL,applyQuality,setGraphics,SaveSys,persistSave,snapOpen,saveOpenNow,openResume,beasts,spawnBeast,beastHit,TERR,WX,WXT,wxSet,lightningStrike,get VM(){return VM},POIS,TX,VEG,S,pl,cam:GL.cam,GL,WORLD,CHS,KEY,newGame,runFrom,FL,IA,DLG,hat,get moose(){return moose},get birds(){return birds},get scene(){return scene},set scene(v){scene=v},MINI,say,startMini,spawnMoose,spawnBird,get ia(){return ia},ENVS,PSN,PSA,FADE,POST,CARD,facingWater,waterDepthAt,gh,step:stepSim,render:renderNow,press:k=>{hit[k]=true},down:c=>keysDown.add(c),up:c=>keysDown.delete(c),look};
+  window.__game={canSaveNow,LF,FISH_SP,lakeFishHit,TREE,VEG,treeTarget,treeHit,POND,streamX,colliders,canAct,getT:()=>T,SWIM,KIT,kitMarker,DIVE,SUNK,diveStart,wreckCollide,kitWorld,canSwim,farShow,FL_PASS,makePerson,dressPilot,loadPeople,FAR,farH,flGround,farTrees,FL_DIR,FL_GO,FL_LAKE,dlgTime,makeRig,RIGS,SPECIES,quadGait,makeBeastModel,makeMooseModel,makeBirdModel,makeDuckModel,makeLoon,makePorcupine,BVM,ARW,setWeapon,shootArrow,BOWC,fish,makeAL60,PEOPLE,ducks,spawnDuck,killDuck,qualityGov,frameStats,Q,QUAL,applyQuality,setGraphics,SaveSys,persistSave,snapOpen,saveOpenNow,openResume,beasts,spawnBeast,beastHit,TERR,WX,WXT,wxSet,lightningStrike,get VM(){return VM},POIS,TX,VEG,S,pl,cam:GL.cam,GL,WORLD,CHS,KEY,newGame,runFrom,FL,IA,DLG,hat,get moose(){return moose},get birds(){return birds},get scene(){return scene},set scene(v){scene=v},MINI,say,startMini,spawnMoose,spawnBird,get ia(){return ia},ENVS,PSN,PSA,FADE,POST,CARD,facingWater,waterDepthAt,gh,step:stepSim,render:renderNow,press:k=>{hit[k]=true},down:c=>keysDown.add(c),up:c=>keysDown.delete(c),look};
   window.__ready=true;
 }
 onUnlock=()=>{if(scene==='play'&&!MINI.on&&!S.cut&&!pl.dead&&!S.paused){S.paused=true;S.pauseSel=0}};
