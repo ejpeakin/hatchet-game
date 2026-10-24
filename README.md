@@ -38,6 +38,12 @@ Good to know:
 - **Story:** the flight, the crash and the chapters of the book: water and food, shelter, fire, the bow, the moose, the storm, swimming down into the sunken plane for the med kit, and the signal. The game saves at each chapter.
 - **Open world:** no chapters and no limits. Explore landmarks, hunt, chop down trees for wood, build a camp, ride out the weather and keep away from wolves and bears, and from the pike in the lake. Progress saves automatically, so you can continue later.
 
+### Stamina and breath
+
+Sprinting, jumping, rolling, swinging the hatchet and swimming strokes use stamina (the green bar). It refills when Brian eases off, faster standing still and slower when he's hungry or thirsty. If it runs out he's worn out for a moment: no sprinting, jumping, rolling or strokes until he gets his strength back.
+
+The BREATH bar beside it is Brian's air underwater. At the surface, press 4 (or tap BREATH) to take a deep breath before a dive. It fills his lungs past full, shown in gold, for about nine more seconds underwater. The extra fades if he doesn't dive soon.
+
 ### Controls
 
 | Action | Keyboard and mouse | Touch |
@@ -52,7 +58,9 @@ Good to know:
 | Dodge | Q or C | Dodge |
 | Swim stroke (in any water deep enough to swim) | Click | Stroke |
 | Swim down / up (in deep water) | Look down and swim, or hold C / Space | Dodge / Jump |
-| Switch hatchet / bow | 1, 2, X or mouse wheel | Swap |
+| Switch hatchet / bow | 1, 2, X or mouse wheel | Swap, or tap HATCHET / BOW |
+| Use the med kit | 3 | Tap MED KIT |
+| Deep breath before a dive (at the surface, for extra air) | 4 | Tap BREATH |
 | Field notes | J or Tab | |
 | Pause | Esc or P | Pause button |
 | Graphics quality | G | |
@@ -63,4 +71,4 @@ Good to know:
 
 - [three.js](https://threejs.org/) r128 and its GLTFLoader (MIT licence).
 - The people use the Ready Player Me sample avatar from the three.js examples, restyled in the game as a bush pilot.
-- Fonts: Alfa Slab One, Barlow Condensed and Lora from Google Fonts.
+- Fonts: Bebas Neue, Special Elite, Alfa Slab One, Barlow Condensed and Lora from Google Fonts.
