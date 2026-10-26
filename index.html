@@ -4056,6 +4056,14 @@ function makerClose(ev){
 function codeInit(){
   if(ACCESS_FORM){$('gateF').addEventListener('submit',makerSubmit,true);$('gateAlt').addEventListener('click',makerClose,true)}   // the code maker gets first look at these
   if(!ACCESS_FORM||ACCESS_URL)return;
+  // the owner's code-maker page (?codes): any device, after typing the owner's own unlock code as the password
+  if(/[?&]codes\b/.test(location.search)){GATE.on=true;GATE.alt='ownerpw';$('gate').hidden=false;$('gateIn').hidden=true;$('gateCode').hidden=false;$('gateAlt').hidden=true;
+    $('gateMsg').textContent='Owner\u2019s code maker. Type your own unlock code to continue.';$('gateUnlock').textContent='Continue';
+    $('gateUnlock').addEventListener('click',ev=>{if(GATE.alt!=='ownerpw')return;ev.stopImmediatePropagation();const v=$('gateCodeIn').value.toUpperCase().replace(/[^A-Z0-9]/g,'');
+      if(v!==gateCodeFor(ACCESS_FORM)){$('gateNote').textContent='That is not the owner\u2019s code.';$('gateNote').classList.add('bad');return}
+      GATE.s={email:ACCESS_FORM,name:'',code:v,status:'approved'};gateSave();$('gateCode').hidden=true;$('gateUnlock').textContent='Unlock';codeMaker()},true);
+    $('gateCodeIn').addEventListener('keydown',e=>{if(e.key==='Enter'&&GATE.alt==='ownerpw'){e.preventDefault();e.stopImmediatePropagation();$('gateUnlock').click()}},true);
+    setTimeout(()=>{try{$('gateCodeIn').focus()}catch(e){}},50);return}
   if(window.claude||/(^|\.)claude(usercontent)?\.(ai|com)$/.test(location.hostname))return;   // the claude.ai copy is private already
   let s=null;try{s=JSON.parse(localStorage.getItem(GATE_KEY)||'null')}catch(e){}
   if(s&&s.code&&s.email&&s.code===gateCodeFor(s.email))return;   // already let in on this device
