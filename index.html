@@ -4031,7 +4031,30 @@ function codeAlt(ev){
   if(GATE.alt==='have'){const email=$('gateEmail').value.trim();if(!gateEmailOK(email)){codeForm('Type the email the owner sent the code to first.',true);$('gateEmail').focus();return}GATE.s={email,name:$('gateName').value.trim(),status:'asked'};gateSave();codeScreen()}
   else{GATE.s=null;gateSave();$('gateCodeIn').value='';codeForm()}
 }
+/* the owner's code maker (pause menu, on the owner's own unlocked device or the claude.ai copy): a friend's email in,
+   their unlock code out, so nobody has to wait for an email */
+function codeOwner(){
+  if(!ACCESS_FORM)return false;if(window.claude||/(^|\.)claude(usercontent)?\.(ai|com)$/.test(location.hostname))return true;
+  try{const s=JSON.parse(localStorage.getItem(GATE_KEY)||'null');return !!(s&&s.code&&s.email&&s.email.trim().toLowerCase()===ACCESS_FORM.toLowerCase()&&s.code===gateCodeFor(s.email))}catch(e){return false}
+}
+function codeMaker(){
+  if(document.exitPointerLock)try{document.exitPointerLock()}catch(e){}
+  GATE.on=true;GATE.alt='maker';$('gate').hidden=false;$('gateMsg').textContent='Make an unlock code: type your friend’s email, then tell them the code.';
+  $('gateIn').hidden=false;$('gateCode').hidden=true;$('gateName').parentElement&&($('gateName').hidden=true);document.querySelector('label[for=gateName]').hidden=true;
+  $('gateEmail').value='';$('gateGo').textContent='Make the code';$('gateNote').textContent='';$('gateNote').classList.remove('bad');
+  const b=$('gateAlt');b.hidden=false;b.textContent='Done';setTimeout(()=>{try{$('gateEmail').focus()}catch(e){}},50);
+}
+function makerSubmit(ev){
+  if(GATE.alt!=='maker')return;ev.preventDefault();ev.stopImmediatePropagation();const e=$('gateEmail').value.trim();
+  if(!gateEmailOK(e)){$('gateNote').textContent='Type the full email they will use, like name@example.com.';$('gateNote').classList.add('bad');return}
+  $('gateNote').classList.remove('bad');$('gateNote').textContent=`Code for ${e.toLowerCase()}:  ${gateCodeFor(e)}`;
+}
+function makerClose(ev){
+  if(GATE.alt!=='maker')return;ev.stopImmediatePropagation();GATE.alt=null;GATE.on=false;$('gate').hidden=true;
+  $('gateName').hidden=false;document.querySelector('label[for=gateName]').hidden=false;$('gateGo').textContent='Ask to play';
+}
 function codeInit(){
+  if(ACCESS_FORM){$('gateF').addEventListener('submit',makerSubmit,true);$('gateAlt').addEventListener('click',makerClose,true)}   // the code maker gets first look at these
   if(!ACCESS_FORM||ACCESS_URL)return;
   if(window.claude||/(^|\.)claude(usercontent)?\.(ai|com)$/.test(location.hostname))return;   // the claude.ai copy is private already
   let s=null;try{s=JSON.parse(localStorage.getItem(GATE_KEY)||'null')}catch(e){}
@@ -8379,20 +8402,21 @@ function drawTitle(g){
   fitText(g,'Unofficial fan project. Story retold in original words. Not affiliated with the author or publisher.',W/2,H-28,W-48);
 }
 /* ---- pause menu ---- */
-const PAUSE_ITEMS=()=>[['RESUME','resume'],['SAVE GAME','save'],['GRAPHICS: '+(Q.mode==='auto'?'AUTO ('+QUAL[Q.tier].label+')':QUAL[Q.mode].label),'gfx'],['FPS COUNTER: '+(Q.show?'ON':'OFF'),'fps'],['SAVE & QUIT TO TITLE','quit']];
+const PAUSE_ITEMS=()=>[['RESUME','resume'],['SAVE GAME','save'],['GRAPHICS: '+(Q.mode==='auto'?'AUTO ('+QUAL[Q.tier].label+')':QUAL[Q.mode].label),'gfx'],['FPS COUNTER: '+(Q.show?'ON':'OFF'),'fps'],...(codeOwner()?[['MAKE AN UNLOCK CODE','code']]:[]),['SAVE & QUIT TO TITLE','quit']];
 const pauseBtn=(i,vw)=>({x:(vw-440)/2,y:244+i*64,w:440,h:54});
 function drawPause(g){
   g.fillStyle='rgba(0,0,0,.66)';g.fillRect(0,0,W,H);g.fillStyle='#050505';g.fillRect(0,0,W,Math.round(H*.1));g.fillRect(0,H-Math.round(H*.1),W,Math.round(H*.1));
   uiText(g,'PAUSED',W/2,180,`400 90px ${FP}`,UI.bone,'center',16);
   uiText(g,S.open?(SaveSys.lastT?'Last saved '+ago(SaveSys.lastT):'Not saved yet'):'Story mode saves at the start of every chapter',W/2,214,`400 16px ${FT}`,UI.boneD,'center');
   PAUSE_ITEMS().forEach((it,i)=>{const r=pauseBtn(i,W),sel=S.pauseSel===i,dis=it[1]==='save'&&!S.open;g.globalAlpha=dis?.45:1;uiPlate(g,r.x,r.y,r.w,r.h,sel,100+i);uiText(g,it[0],W/2,r.y+37,`400 28px ${FP}`,sel?'#1a120a':UI.bone,'center',4,r.w-30);g.globalAlpha=1});
-  g.font=`400 14px ${FT}`;g.fillStyle=UI.boneF;g.textAlign='center';fitText(g,TOUCH?'Tap an option':'W / S and E to choose · ESC or P to resume · G graphics · F3 counter',W/2,pauseBtn(5,W).y+4,W-48);
-  g.fillText(SaveSys.cloudOn?'Synced to your account':'Saved in this browser',W/2,pauseBtn(5,W).y+24);
+  g.font=`400 14px ${FT}`;g.fillStyle=UI.boneF;g.textAlign='center';fitText(g,TOUCH?'Tap an option':'W / S and E to choose · ESC or P to resume · G graphics · F3 counter',W/2,pauseBtn(PAUSE_ITEMS().length,W).y+4,W-48);
+  g.fillText(SaveSys.cloudOn?'Synced to your account':'Saved in this browser',W/2,pauseBtn(PAUSE_ITEMS().length,W).y+24);
 }
 async function pauseChoose(id){
   if(id==='resume'){S.paused=false;return}
   if(id==='gfx'){cycleGraphics();return}
   if(id==='fps'){toggleFps();return}
+  if(id==='code'){S.paused=false;codeMaker();return}
   if(id==='save'){if(S.open){if(saveOpenNow())toast('Game saved.',2.2);else toast('You cannot save right now.',2.2)}else toast('Story progress saves at each chapter.',2.6);return}
   if(id==='quit'){if(S.open)saveOpenNow();S.paused=false;resetSeq();scene='title';S.cut=false;MINI.on=false;FADE.a=0;FADE.to=0;DLG.cur=null;DLG.q.length=0;S.goals=[];S.hint='';S.menu=S.open?0:1;S.open=false;clearBeasts();roamPack=null;S.storm=0;S.stormTarget=0;wxReset();S.tod=18.7;placePlayer(KEY.spawn[0],KEY.spawn[1],0)}
 }
