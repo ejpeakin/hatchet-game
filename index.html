@@ -8241,13 +8241,18 @@ function drawHUD(g){
     g.fillStyle='rgba(150,28,18,.88)';g.fill(roughPath(-tw/2,-21,tw,40,33,2,8));g.strokeStyle='rgba(255,214,196,.55)';g.lineWidth=1.5;g.stroke(roughPath(-tw/2+5,-16,tw-10,30,34,1.4,8));
     g.fillStyle='#ffe4d8';g.textAlign='center';g.fillText(t,2,10);g.letterSpacing='0px';g.restore()}
   // the survival log: a notebook page taped up in the corner, ticked off in pen
-  const gl=S.goals;if(gl.length){const w=Math.min(400,Math.max(320,W*.29)),x=W-w-26,y=28,h=66+gl.length*28;uiPaper(g,x,y,w,h,7);
-    uiText(g,'SURVIVAL LOG',x+42,y+31,`400 16px ${FP}`,'rgba(128,40,18,.9)','left',3);uiText(g,(S.chTitle||'').toUpperCase(),x+w-16,y+31,`400 16px ${FP}`,UI.inkF,'right',2);
-    gl.forEach((o,i)=>{const done=o.d(),yy=y+62+i*28,bx=x+42,t=typeof o.t==='function'?o.t():o.t;
-      g.save();g.translate(bx,yy-13);g.strokeStyle=UI.ink;g.lineWidth=1.3;g.stroke(roughPath(0,0,13,13,40+i,.7,5));
-      if(done){g.strokeStyle='#7a2a16';g.lineWidth=2.4;g.lineCap='round';g.beginPath();g.moveTo(2,6);g.lineTo(6,11);g.lineTo(16,-4);g.stroke()}g.restore();
-      g.font=`400 16px ${FT}`;g.textAlign='left';g.fillStyle=done?'rgba(43,34,25,.48)':UI.ink;g.fillText(t,bx+22,yy,w-82);
-      if(done){const tw=Math.min(g.measureText(t).width,w-82);g.strokeStyle='rgba(122,42,22,.72)';g.lineWidth=1.5;g.beginPath();g.moveTo(bx+20,yy-5);g.lineTo(bx+24+tw,yy-6.5);g.stroke()}})}
+  const gl=S.goals;if(gl.length){
+    // open world: just the next few unfinished goals and a count, so the page stays small; story chapters list theirs in full
+    const open=S.open,all=gl.map(o=>({o,done:o.d()})),nd=all.filter(a=>a.done).length,rows=open?all.filter(a=>!a.done).slice(0,3):all,more=open?all.length-nd-rows.length:0,rh=open?24:28,fs=open?15:16;
+    const w=open?Math.min(330,Math.max(280,W*.24)):Math.min(400,Math.max(320,W*.29)),x=W-w-26,y=28,h=(open?52:58)+Math.max(1,rows.length)*rh+(more>0?14:0);uiPaper(g,x,y,w,h,7);
+    uiText(g,'SURVIVAL LOG',x+42,y+29,`400 16px ${FP}`,'rgba(128,40,18,.9)','left',3);uiText(g,open?`${nd} / ${all.length} DONE`:(S.chTitle||'').toUpperCase(),x+w-16,y+29,`400 16px ${FP}`,UI.inkF,'right',2);
+    if(!rows.length)uiText(g,'Everything done. Keep surviving.',x+42,y+56,`400 ${fs}px ${FT}`,UI.ink);
+    rows.forEach(({o,done},i)=>{const yy=y+(open?55:62)+i*rh,bx=x+42,t=typeof o.t==='function'?o.t():o.t;
+      g.save();g.translate(bx,yy-12);g.strokeStyle=UI.ink;g.lineWidth=1.3;g.stroke(roughPath(0,0,12,12,40+i,.7,5));
+      if(done){g.strokeStyle='#7a2a16';g.lineWidth=2.4;g.lineCap='round';g.beginPath();g.moveTo(2,6);g.lineTo(6,11);g.lineTo(15,-4);g.stroke()}g.restore();
+      g.font=`400 ${fs}px ${FT}`;g.textAlign='left';g.fillStyle=done?'rgba(43,34,25,.48)':UI.ink;g.fillText(t,bx+20,yy,w-78);
+      if(done){const tw=Math.min(g.measureText(t).width,w-78);g.strokeStyle='rgba(122,42,22,.72)';g.lineWidth=1.5;g.beginPath();g.moveTo(bx+18,yy-5);g.lineTo(bx+22+tw,yy-6.5);g.stroke()}});
+    if(more>0)uiText(g,`+${more} more`,x+62,y+h-12,`400 13px ${FT}`,UI.inkF)}
   // what Brian carries: leather tags along the bottom
   const items=[['HATCHET',pl.hasH?1:0,'#cfd5d8'],['BOW',S.fl.bow?1:0,'#d8bd8e'],['ASH STAVE',S.inv.stave|0,'#c9b48a'],['WILLOW SHOOTS',S.inv.shoots|0,'#9aa860'],['FEATHERS',S.fl.fletched?0:S.inv.feathers|0,'#b8b2a4'],['BRANCHES',S.inv.branches,'#8a6a42'],['BIRCH BARK',S.inv.tinder,'#e8e2cc'],['DRY LOGS',S.inv.wood,'#b08850'],['RAW BIRD',S.inv.meat,'#c88a6a'],['FISH',S.inv.fish,'#8ab0c0'],['SIGNAL WOOD',S.inv.signal,'#b08850'],['MED KIT',S.inv.medkit|0,'#e0453a'],['SURVIVAL PACK',S.inv.pack,'#c6561f'],['TRANSMITTER',S.inv.elt,S.eltOn&&Math.sin(T*5)>0?'#ff4030':'#e8863a']];
   drawHotbar(g);
