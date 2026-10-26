@@ -3999,15 +3999,25 @@ async function codeRequest(ev){
   const email=$('gateEmail').value.trim(),name=$('gateName').value.trim().slice(0,60);
   if(!gateEmailOK(email)){codeForm('Please enter a full email address, like name@example.com.',true);$('gateEmail').focus();return}
   GATE.busy=true;$('gateGo').disabled=true;$('gateNote').textContent='Sending…';$('gateNote').classList.remove('bad');
+  const fields={name:name||'(no name)',email,_subject:`Hatchet Survival: ${name||email} wants to play`,_template:'box',_captcha:'false',
+    message:`${name||'Someone'} (${email}) asked to play Hatchet Survival.\n\nTo let them in, reply to this email with their unlock code: ${gateCodeFor(email)}\nTo say no, just ignore this email.`};
   try{
-    const r=await fetch('https://formsubmit.co/ajax/'+encodeURIComponent(ACCESS_FORM),{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json'},
-      body:JSON.stringify({name:name||'(no name)',email,_subject:`Hatchet Survival: ${name||email} wants to play`,_template:'box',_captcha:'false',
-        message:`${name||'Someone'} (${email}) asked to play Hatchet Survival.\n\nTo let them in, reply to this email with their unlock code: ${gateCodeFor(email)}\nTo say no, just ignore this email.`})});
-    const j=await r.json().catch(()=>({}));GATE.busy=false;$('gateGo').disabled=false;
-    if(String(j.success)==='true'){GATE.s={email,name,status:'asked'};gateSave();codeScreen()}
+    let j;
+    try{const r=await fetch('https://formsubmit.co/ajax/'+encodeURIComponent(ACCESS_FORM),{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify(fields)});j=await r.json()}
+    catch(e){j=await codePostForm(fields)}   // some networks and blockers stop the page's own request: send it as a plain form instead
+    GATE.busy=false;$('gateGo').disabled=false;
+    if(String(j.success)==='true'){GATE.s={email,name,status:'asked'};gateSave();codeScreen(j.blind?'If the owner does not get your request, ask them directly.':'')}
     else if(/activat/i.test(j.message||''))codeForm('The owner still has to switch on email requests (they have been sent a link to do it). Please try again later.',true);
     else codeForm('The email service turned the request down'+(j.message?': '+j.message:'.')+' Please try again later.',true);
   }catch(e){GATE.busy=false;$('gateGo').disabled=false;codeForm('Could not reach the email service. Check your internet connection and try again.',true)}
+}
+/* the backup: an ordinary form posted into a hidden frame (its answer cannot be read, so it counts as sent once the frame loads) */
+function codePostForm(fields){
+  return new Promise((res,rej)=>{const n='gatefs'+Date.now(),f=document.createElement('iframe'),fm=document.createElement('form');f.name=n;f.hidden=true;f.title='sign-in';
+    fm.method='POST';fm.action='https://formsubmit.co/'+encodeURIComponent(ACCESS_FORM);fm.target=n;fm.hidden=true;
+    for(const k in fields){const i=document.createElement('input');i.type='hidden';i.name=k;i.value=fields[k];fm.appendChild(i)}
+    let done=false;const end=ok=>{if(done)return;done=true;setTimeout(()=>{f.remove();fm.remove()},2000);ok?res({success:'true',blind:true}):rej(new Error('unreachable'))};
+    f.onload=()=>end(true);setTimeout(()=>end(false),15000);document.body.append(f,fm);fm.submit()});
 }
 function codeUnlock(){
   const s=GATE.s||{},v=$('gateCodeIn').value.toUpperCase().replace(/[^A-Z0-9]/g,'');
