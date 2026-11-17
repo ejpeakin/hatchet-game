@@ -3756,10 +3756,25 @@ addEventListener('resize',fit);
 
 /* ---- input ---- */
 const keysDown=new Set(),vk={};let hit={},rel={};const mouse={x:0,y:0},look={dx:0,dy:0},joy={x:0,y:0};let locked=false,dragging=false,dragMoved=0;
-const MAP={ArrowUp:'fwd',KeyW:'fwd',ArrowDown:'back',KeyS:'back',KeyA:'left',KeyD:'right',ArrowLeft:'lookL',ArrowRight:'lookR',Space:'jump',ShiftLeft:'run',ShiftRight:'run',KeyE:'act',Enter:'act',KeyF:'throw',KeyQ:'dodge',KeyC:'dodge',KeyM:'mute',KeyJ:'journal',Tab:'journal',Escape:'pause',KeyP:'pause',KeyN:'newg',F3:'fps',KeyG:'gfx',Digit1:'w1',Digit2:'w2',Digit3:'w3',Digit4:'w4',Numpad1:'w1',Numpad2:'w2',Numpad3:'w3',Numpad4:'w4',KeyX:'swap'};
-const REV={};for(const c in MAP)(REV[MAP[c]]=REV[MAP[c]]||[]).push(c);
+/* key bindings: up to two keys per action, changed on the pause menu's CONTROLS screen and kept in this browser.
+   Esc always pauses (and cancels a rebind), so nobody can lock themselves out. */
+const KB_DEF={fwd:['KeyW','ArrowUp'],back:['KeyS','ArrowDown'],left:['KeyA',null],right:['KeyD',null],run:['ShiftLeft','ShiftRight'],jump:['Space',null],act:['KeyE','Enter'],throw:['KeyF',null],dodge:['KeyQ','KeyC'],
+  swap:['KeyX',null],w1:['Digit1','Numpad1'],w2:['Digit2','Numpad2'],w3:['Digit3','Numpad3'],w4:['Digit4','Numpad4'],journal:['KeyJ','Tab'],pause:['KeyP',null],lookL:['ArrowLeft',null],lookR:['ArrowRight',null],mute:['KeyM',null],gfx:['KeyG',null],fps:['F3',null],newg:['KeyN',null]};
+const KB={b:{},wait:null},MAP={},REV={};
+function kbApply(){for(const k in MAP)delete MAP[k];for(const k in REV)delete REV[k];for(const a in KB.b)for(const c of KB.b[a])if(c&&!MAP[c])MAP[c]=a;MAP.Escape='pause';for(const c in MAP)(REV[MAP[c]]=REV[MAP[c]]||[]).push(c)}
+function kbSave(){try{localStorage.setItem('hatchet.keys',JSON.stringify(KB.b))}catch(e){}}
+function kbLoad(){let s=null;try{s=JSON.parse(localStorage.getItem('hatchet.keys')||'null')}catch(e){}for(const a in KB_DEF){const v=s&&Array.isArray(s[a])?s[a]:KB_DEF[a];KB.b[a]=[v[0]||null,v[1]||null]}kbApply()}
+function kbSet(a,slot,code){if(code)for(const x in KB.b)KB.b[x]=KB.b[x].map(c=>c===code?null:c);KB.b[a][slot]=code;kbSave();kbApply();keysDown.clear()}   // a key moves to its new action
+function kbReset(){for(const a in KB_DEF)KB.b[a]=KB_DEF[a].slice();kbSave();kbApply();keysDown.clear()}
+const KEY_NAMES={Space:'SPACE',Enter:'ENTER',Tab:'TAB',Escape:'ESC',Backspace:'BKSP',ShiftLeft:'L SHIFT',ShiftRight:'R SHIFT',ControlLeft:'L CTRL',ControlRight:'R CTRL',AltLeft:'L ALT',AltRight:'R ALT',MetaLeft:'L META',MetaRight:'R META',CapsLock:'CAPS',
+  ArrowUp:'↑',ArrowDown:'↓',ArrowLeft:'←',ArrowRight:'→',Backquote:'`',Minus:'-',Equal:'=',BracketLeft:'[',BracketRight:']',Backslash:'\\',Semicolon:';',Quote:"'",Comma:',',Period:'.',Slash:'/'};
+const keyName=c=>!c?'—':KEY_NAMES[c]||c.replace(/^Key/,'').replace(/^Digit/,'').replace(/^Numpad/,'NUM ').toUpperCase();
+const keyOf=a=>{const b=KB.b[a]||[];return keyName(b[0]||b[1])};
+kbLoad();
 const isDown=a=>(vk[a]>0)||(REV[a]||[]).some(c=>keysDown.has(c));
-addEventListener('keydown',e=>{if(GATE.on)return;const a=MAP[e.code];if(!a)return;e.preventDefault();   // nothing reaches the game while the access screen is up
+addEventListener('keydown',e=>{if(GATE.on)return;
+  if(KB.wait){e.preventDefault();const w=KB.wait;KB.wait=null;if(e.code==='Escape')return;kbSet(w.a,w.s,e.code==='Backspace'||e.code==='Delete'?null:e.code);return}   // the CONTROLS screen is waiting for a new key
+  const a=MAP[e.code];if(!a)return;e.preventDefault();   // nothing reaches the game while the access screen is up
 if(!e.repeat&&!isDown(a))hit[a]=true;keysDown.add(e.code);Snd.init();if(a==='mute'&&!e.repeat)Snd.toggle()});
 addEventListener('keyup',e=>{const a=MAP[e.code];if(!a)return;keysDown.delete(e.code);if(!isDown(a))rel[a]=true});
 addEventListener('blur',()=>{keysDown.clear();for(const k in vk)vk[k]=0});
@@ -8323,7 +8338,7 @@ function drawHUD(g){
   if(pl.charge>0){g.strokeStyle='rgba(0,0,0,.5)';g.lineWidth=6;g.beginPath();g.arc(cx,cy,24,0,TAU);g.stroke();g.strokeStyle=pl.charge>.9?'#ffc15a':'#e8863a';g.beginPath();g.arc(cx,cy,24,-Math.PI/2,-Math.PI/2+TAU*pl.charge);g.stroke()}
   // prompt (projected onto the thing you can use): a dark plate with the key stamped on rust
   if(ia&&!DLG.cur){const dis=ia.lab[0]==='!',lab=dis?ia.lab.slice(1):ia.lab;let p=ia.o.test?null:projectTo(ia.tx,gh(ia.tx,ia.tz)+1.3,ia.tz);let px=p?p[0]:W/2,py=p?p[1]:H*.62;px=clamp(px,170,W-170);py=clamp(py,90,H-120);
-    const key=TOUCH?'USE':'E',kw=TOUCH?46:26;g.font=`400 22px ${FP}`;g.letterSpacing='1px';const tw=g.measureText(lab).width;g.letterSpacing='0px';const w=tw+(dis?40:kw+36);
+    g.font=`400 21px ${FP}`;const key=TOUCH?'USE':keyOf('act'),kw=Math.max(26,g.measureText(key).width+14);g.font=`400 22px ${FP}`;g.letterSpacing='1px';const tw=g.measureText(lab).width;g.letterSpacing='0px';const w=tw+(dis?40:kw+36);
     uiPanel(g,px-w/2,py-21,w,42,{seed:61,fill:UI.charD,edge:dis?'rgba(233,223,196,.22)':UI.rust});
     if(!dis){g.save();g.translate(px-w/2+9,py-13);g.fillStyle=UI.rust;g.fill(roughPath(0,0,kw,26,62,.8,6));g.restore();uiText(g,key,px-w/2+9+kw/2,py+8,`400 21px ${FP}`,'#1a120a','center',1)}
     uiText(g,lab,px-w/2+(dis?20:kw+20),py+8,`400 22px ${FP}`,dis?UI.boneD:UI.bone,'left',1)}
@@ -8410,8 +8425,8 @@ function drawTitle(g){
   fitText(g,'Unofficial fan project. Story retold in original words. Not affiliated with the author or publisher.',W/2,H-28,W-48);
 }
 /* ---- pause menu ---- */
-const PAUSE_ITEMS=()=>[['RESUME','resume'],['SAVE GAME','save'],['GRAPHICS: '+(Q.mode==='auto'?'AUTO ('+QUAL[Q.tier].label+')':QUAL[Q.mode].label),'gfx'],['FPS COUNTER: '+(Q.show?'ON':'OFF'),'fps'],...(codeOwner()?[['MAKE AN UNLOCK CODE','code']]:[]),['SAVE & QUIT TO TITLE','quit']];
-const pauseBtn=(i,vw)=>({x:(vw-440)/2,y:244+i*64,w:440,h:54});
+const PAUSE_ITEMS=()=>[['RESUME','resume'],['SAVE GAME','save'],['GRAPHICS: '+(Q.mode==='auto'?'AUTO ('+QUAL[Q.tier].label+')':QUAL[Q.mode].label),'gfx'],['FPS COUNTER: '+(Q.show?'ON':'OFF'),'fps'],...(TOUCH?[]:[['CONTROLS','controls']]),...(codeOwner()?[['MAKE AN UNLOCK CODE','code']]:[]),['SAVE & QUIT TO TITLE','quit']];
+const pauseBtn=(i,vw)=>({x:(vw-440)/2,y:232+i*57,w:440,h:49});
 function drawPause(g){
   g.fillStyle='rgba(0,0,0,.66)';g.fillRect(0,0,W,H);g.fillStyle='#050505';g.fillRect(0,0,W,Math.round(H*.1));g.fillRect(0,H-Math.round(H*.1),W,Math.round(H*.1));
   uiText(g,'PAUSED',W/2,180,`400 90px ${FP}`,UI.bone,'center',16);
@@ -8425,10 +8440,40 @@ async function pauseChoose(id){
   if(id==='gfx'){cycleGraphics();return}
   if(id==='fps'){toggleFps();return}
   if(id==='code'){S.paused=false;codeMaker();return}
+  if(id==='controls'){S.controls=true;S.ctlSel={i:0,s:0};return}
   if(id==='save'){if(S.open){if(saveOpenNow())toast('Game saved.',2.2);else toast('You cannot save right now.',2.2)}else toast('Story progress saves at each chapter.',2.6);return}
   if(id==='quit'){if(S.open)saveOpenNow();S.paused=false;resetSeq();scene='title';S.cut=false;MINI.on=false;FADE.a=0;FADE.to=0;DLG.cur=null;DLG.q.length=0;S.goals=[];S.hint='';S.menu=S.open?0:1;S.open=false;clearBeasts();roamPack=null;S.storm=0;S.stormTarget=0;wxReset();S.tod=18.7;placePlayer(KEY.spawn[0],KEY.spawn[1],0)}
 }
+/* ---- the CONTROLS screen: every action with two key slots ---- */
+const CTL=[['fwd','Move forward'],['back','Move back'],['left','Step left'],['right','Step right'],['run','Run'],['jump','Jump · swim up'],['act','Use · pick up'],['throw','Throw · swim stroke'],['dodge','Dodge · dive'],['swap','Switch hatchet / bow'],['w1','Hatchet'],
+  ['w2','Bow'],['w3','Med kit'],['w4','Deep breath'],['journal','Field notes'],['pause','Pause (Esc always works)'],['lookL','Turn left'],['lookR','Turn right'],['mute','Mute'],['gfx','Graphics setting'],['fps','Frame-rate counter'],['newg','New game (title screen)']];
+function ctlGeom(vw){const cw=Math.min(560,(vw-80)/2),x0=(vw-2*cw-24)/2,rows=CTL.map((c,i)=>{const col=i<11?0:1,r=i%11,x=x0+col*(cw+24),y=150+r*37;return{x,y,w:cw,h:32,s:[{x:x+cw-206,y:y+2,w:100,h:28},{x:x+cw-102,y:y+2,w:100,h:28}]}});
+  return{rows,reset:{x:vw/2-236,y:568,w:224,h:44},back:{x:vw/2+12,y:568,w:224,h:44}}}
+const inR=(r,x,y)=>x>=r.x&&x<=r.x+r.w&&y>=r.y&&y<=r.y+r.h;
+function controlsUpdate(){
+  const k=H/720,vw=W/k,mx=mouse.x/k,my=mouse.y/k,G_=ctlGeom(vw),sel=S.ctlSel,n=CTL.length;
+  if(KB.wait){hit={};return}
+  let over=null;G_.rows.forEach((r,i)=>r.s.forEach((q,j)=>{if(inR(q,mx,my))over={i,s:j}}));if(inR(G_.reset,mx,my))over={i:n,s:0};if(inR(G_.back,mx,my))over={i:n+1,s:0};
+  if(over&&(mouse.mv||hit.click)){sel.i=over.i;sel.s=over.s}
+  if(hit.fwd)sel.i=(sel.i+n+1)%(n+2);if(hit.back)sel.i=(sel.i+1)%(n+2);if(hit.left)sel.s=0;if(hit.right)sel.s=1;
+  if(hit.pause){S.controls=false;KB.wait=null}
+  else if(hit.act||hit.click&&over){if(sel.i===n)kbReset();else if(sel.i===n+1)S.controls=false;else KB.wait={a:CTL[sel.i][0],s:sel.s}}
+  hit={};mouse.mv=false;
+}
+function drawControls(g){
+  g.fillStyle='rgba(0,0,0,.74)';g.fillRect(0,0,W,H);g.fillStyle='#050505';g.fillRect(0,0,W,72);g.fillRect(0,H-72,W,72);
+  uiText(g,'CONTROLS',W/2,118,`400 60px ${FP}`,UI.bone,'center',12);
+  uiText(g,KB.wait?'Press the new key now. Delete or Backspace clears this slot. Esc cancels.':'Click a key slot (or W / S, A / D and E), then press the new key. The mouse buttons stay as they are.',W/2,140,`400 14px ${FT}`,KB.wait?UI.rustL:UI.boneD,'center',0,W-60);
+  const G_=ctlGeom(W),sel=S.ctlSel||{i:0,s:0};
+  G_.rows.forEach((r,i)=>{const [a,lab]=CTL[i];uiText(g,lab,r.x+4,r.y+22,`400 15px ${FT}`,UI.bone,'left',0,r.w-220);
+    r.s.forEach((q,j)=>{const on=sel.i===i&&sel.s===j,w8=KB.wait&&KB.wait.a===a&&KB.wait.s===j;
+      if(w8||on)uiPlate(g,q.x,q.y,q.w,q.h,true,200+i*2+j);else uiPanel(g,q.x,q.y,q.w,q.h,{seed:200+i*2+j,j:1,edge:'rgba(233,223,196,.18)'});
+      uiText(g,w8?(Math.sin(T*8)>0?'PRESS A KEY':''):keyName(KB.b[a][j]),q.x+q.w/2,q.y+21,`400 18px ${FP}`,w8||on?'#1a120a':KB.b[a][j]?UI.bone:UI.boneF,'center',1,q.w-10)})});
+  const n=CTL.length;uiPlate(g,G_.reset.x,G_.reset.y,G_.reset.w,G_.reset.h,sel.i===n,240);uiText(g,'RESET TO DEFAULTS',G_.reset.x+G_.reset.w/2,G_.reset.y+30,`400 22px ${FP}`,sel.i===n?'#1a120a':UI.bone,'center',2);
+  uiPlate(g,G_.back.x,G_.back.y,G_.back.w,G_.back.h,sel.i===n+1,241);uiText(g,'BACK',G_.back.x+G_.back.w/2,G_.back.y+30,`400 22px ${FP}`,sel.i===n+1?'#1a120a':UI.bone,'center',3);
+}
 function pauseUpdate(){
+  if(S.controls){controlsUpdate();return}
   const k=H/720,vw=W/k,items=PAUSE_ITEMS();let over=-1;
   for(let i=0;i<items.length;i++){const r=pauseBtn(i,vw);if(mouse.x/k>=r.x&&mouse.x/k<=r.x+r.w&&mouse.y/k>=r.y&&mouse.y/k<=r.y+r.h)over=i}
   if(hit.fwd)S.pauseSel=(S.pauseSel+items.length-1)%items.length;if(hit.back)S.pauseSel=(S.pauseSel+1)%items.length;
@@ -8734,7 +8779,7 @@ function update(dt){
   if(hit.gfx&&scene!=='load'){hit.gfx=false;cycleGraphics()}
   if(S.paused&&scene==='play'){S.savedT=Math.max(0,(S.savedT||0)-dt);pauseUpdate();look.dx=look.dy=0;worldUpdate(0,GL.cam.position);updateCamera(0);return}
   S.savedT=Math.max(0,(S.savedT||0)-dt);
-  if(hit.pause&&scene==='play'&&!MINI.on&&!S.cut&&!pl.dead&&!S.journal){hit.pause=false;S.paused=true;S.pauseSel=0;if(document.exitPointerLock)try{document.exitPointerLock()}catch(e){}}
+  if(hit.pause&&scene==='play'&&!MINI.on&&!S.cut&&!pl.dead&&!S.journal){hit.pause=false;S.paused=true;S.pauseSel=0;S.controls=false;KB.wait=null;if(document.exitPointerLock)try{document.exitPointerLock()}catch(e){}}
   tmUpdate(dt);fadeUpdate(dt);cardUpdate(dt);
   for(let i=toasts.length-1;i>=0;i--){toasts[i].t-=dt;if(toasts[i].t<=0)toasts.splice(i,1)}
   const dlg=dlgUpdate(dt);
@@ -8761,7 +8806,7 @@ function draw(){
   else{
     if(scene==='title')virtual(g,()=>drawTitle(g));else if(scene==='brief')virtual(g,()=>drawBrief(g));else if(scene==='end')virtual(g,()=>drawEnd(g));else if(scene==='flight')drawFlightHUD(g);else drawHUD(g);
   }
-  if(S.paused&&scene==='play')virtual(g,()=>drawPause(g));
+  if(S.paused&&scene==='play')virtual(g,()=>S.controls?drawControls(g):drawPause(g));
   uiLetterbox(g,(scene==='play'||scene==='flight')&&!MINI.on&&!S.journal&&!S.paused&&(S.cut||!!DLG.cur||CARD.t>0),DLG.cur?dialogueBand():0);
   drawCard(g);drawDialogue(g);
   drawFps(g);
@@ -8785,7 +8830,7 @@ async function boot(){
   window.__bt=[];for(let i=0;i<BUILD3D.length;i++){await new Promise(r=>setTimeout(r,12));const t0=performance.now();try{BUILD3D[i]();window.__bt.push([i,Math.round(performance.now()-t0)])}catch(e){console.error('build step',i,e);LOADMSG='Could not start the 3D view.';return}LOADK=(i+1)/BUILD3D.length;LOADMSG=msgs[Math.floor(LOADK*msgs.length*.999)]}
   loadSaves();saveInit();if(SaveSys.saved.story&&!SaveSys.saved.open)S.menu=1;
   fit();scene='title';placePlayer(KEY.spawn[0],KEY.spawn[1],0);S.tod=18.7;FADE.a=1;FADE.to=0;FADE.sp=1;
-  window.__game={card,LBX,CARD,STAM,BREATH_MAX,hotbarRects,useMedkit,deepBreath,canSaveNow,LF,FISH_SP,lakeFishHit,TREE,VEG,treeTarget,treeHit,POND,streamX,colliders,canAct,getT:()=>T,SWIM,KIT,kitMarker,DIVE,SUNK,diveStart,wreckCollide,kitWorld,canSwim,farShow,FL_PASS,makePerson,dressPilot,loadPeople,FAR,farH,flGround,farTrees,FL_DIR,FL_GO,FL_LAKE,dlgTime,makeRig,RIGS,SPECIES,quadGait,makeBeastModel,makeMooseModel,makeBirdModel,makeDuckModel,makeLoon,makePorcupine,BVM,ARW,setWeapon,shootArrow,BOWC,fish,makeAL60,PEOPLE,ducks,spawnDuck,killDuck,qualityGov,frameStats,Q,QUAL,applyQuality,setGraphics,SaveSys,persistSave,snapOpen,saveOpenNow,openResume,beasts,spawnBeast,beastHit,TERR,WX,WXT,wxSet,lightningStrike,get VM(){return VM},POIS,TX,VEG,S,pl,cam:GL.cam,GL,WORLD,CHS,KEY,newGame,runFrom,FL,IA,DLG,hat,get moose(){return moose},get birds(){return birds},get scene(){return scene},set scene(v){scene=v},MINI,say,startMini,spawnMoose,spawnBird,get ia(){return ia},ENVS,PSN,PSA,FADE,POST,CARD,facingWater,waterDepthAt,gh,step:stepSim,render:renderNow,press:k=>{hit[k]=true},down:c=>keysDown.add(c),up:c=>keysDown.delete(c),look};
+  window.__game={KB,kbReset,ctlGeom,card,LBX,CARD,STAM,BREATH_MAX,hotbarRects,useMedkit,deepBreath,canSaveNow,LF,FISH_SP,lakeFishHit,TREE,VEG,treeTarget,treeHit,POND,streamX,colliders,canAct,getT:()=>T,SWIM,KIT,kitMarker,DIVE,SUNK,diveStart,wreckCollide,kitWorld,canSwim,farShow,FL_PASS,makePerson,dressPilot,loadPeople,FAR,farH,flGround,farTrees,FL_DIR,FL_GO,FL_LAKE,dlgTime,makeRig,RIGS,SPECIES,quadGait,makeBeastModel,makeMooseModel,makeBirdModel,makeDuckModel,makeLoon,makePorcupine,BVM,ARW,setWeapon,shootArrow,BOWC,fish,makeAL60,PEOPLE,ducks,spawnDuck,killDuck,qualityGov,frameStats,Q,QUAL,applyQuality,setGraphics,SaveSys,persistSave,snapOpen,saveOpenNow,openResume,beasts,spawnBeast,beastHit,TERR,WX,WXT,wxSet,lightningStrike,get VM(){return VM},POIS,TX,VEG,S,pl,cam:GL.cam,GL,WORLD,CHS,KEY,newGame,runFrom,FL,IA,DLG,hat,get moose(){return moose},get birds(){return birds},get scene(){return scene},set scene(v){scene=v},MINI,say,startMini,spawnMoose,spawnBird,get ia(){return ia},ENVS,PSN,PSA,FADE,POST,CARD,facingWater,waterDepthAt,gh,step:stepSim,render:renderNow,press:k=>{hit[k]=true},down:c=>keysDown.add(c),up:c=>keysDown.delete(c),look};
   window.__ready=true;
 }
 onUnlock=()=>{if(scene==='play'&&!MINI.on&&!S.cut&&!pl.dead&&!S.paused){S.paused=true;S.pauseSel=0}};

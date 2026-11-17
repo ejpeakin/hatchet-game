@@ -44,6 +44,8 @@ The BREATH bar beside it is Brian's air underwater. At the surface, press 4 (or 
 
 ### Controls
 
+These are the default keys. To change them, open the pause menu (Esc) and choose **CONTROLS**. Click a key slot, then press the new key. Each action can have two keys, Delete clears a slot, and Reset to Defaults puts them all back. The changes are saved in that browser. Esc always pauses, whatever is bound.
+
 | Action | Keyboard and mouse | Touch |
 | --- | --- | --- |
 | Move | W A S D or arrow keys | Left joystick |
